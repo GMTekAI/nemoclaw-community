@@ -38,11 +38,9 @@ RUN pyinstaller \
 # ── Stage 1: build the nemo-relay CLI binary ──────────────────────────────────
 # Built inside ${BASE_IMAGE} so the resulting binary links against the same
 # glibc as the runtime — same constraint as the sidecar-builder stage above.
-# 0.3.0-beta.2 is the first NeMo-Relay release on crates.io (the predecessor
-# crate `nemo-flow-cli` was published through 0.2.0 before the project's rename
-# from NeMo-Flow). `cargo install` is the simplest reproducible path; the
-# ~3-5 min toolchain bootstrap is amortized across the cargo target cache when
-# the version pin doesn't change.
+# 0.3.0-beta.2 is the first NeMo Relay release on crates.io. `cargo install` is
+# the simplest reproducible path; the ~3-5 min toolchain bootstrap is amortized
+# across the cargo target cache when the version pin doesn't change.
 FROM ${BASE_IMAGE} AS nemo-relay-builder
 ARG NEMO_RELAY_CLI_VERSION=0.3.0-beta.2
 RUN apt-get update -qq \
@@ -63,6 +61,8 @@ FROM ${BASE_IMAGE}
 # Empty string means no telemetry (standard behavior).
 ARG PHOENIX_COLLECTOR_ENDPOINT=""
 ENV PHOENIX_COLLECTOR_ENDPOINT=${PHOENIX_COLLECTOR_ENDPOINT}
+ARG NEMO_RELAY_PROJECT_NAME=""
+ENV NEMO_RELAY_PROJECT_NAME=${NEMO_RELAY_PROJECT_NAME}
 
 # Host address of the Outlook token manager (port 8765).
 # Baked at image build time using the same pattern as PHOENIX_COLLECTOR_ENDPOINT —
@@ -223,6 +223,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
 COPY agents/hermes/nemo-relay/plugins.toml.in /tmp/nemo-relay-plugins.toml.in
 RUN mkdir -p /etc/nemo-relay \
     && PHOENIX_URL="${PHOENIX_COLLECTOR_ENDPOINT:-}" \
+    && PROJECT_NAME="${NEMO_RELAY_PROJECT_NAME:-}" \
     && if [ -z "$PHOENIX_URL" ]; then \
          PHOENIX_ENABLED=false; PHOENIX_ENDPOINT=""; \
        else \
@@ -232,9 +233,10 @@ RUN mkdir -p /etc/nemo-relay \
          # .env.example and README for the documented value format.
          PHOENIX_ENABLED=true; PHOENIX_ENDPOINT="${PHOENIX_URL%/}"; \
        fi \
-    && sed -e "s|@@PHOENIX_ENABLED@@|${PHOENIX_ENABLED}|g" \
-           -e "s|@@PHOENIX_ENDPOINT@@|${PHOENIX_ENDPOINT}|g" \
-       /tmp/nemo-relay-plugins.toml.in > /etc/nemo-relay/plugins.toml \
+    && PHOENIX_ENABLED="${PHOENIX_ENABLED}" \
+       PHOENIX_ENDPOINT="${PHOENIX_ENDPOINT}" \
+       PROJECT_NAME="${PROJECT_NAME}" \
+       python3 -c 'from pathlib import Path; import json, os; template = Path("/tmp/nemo-relay-plugins.toml.in").read_text(); project = os.environ["PROJECT_NAME"].strip(); quoted = json.dumps(project); attrs = "\n".join(["[components.config.openinference.resource_attributes]", "\"openinference.project.name\" = " + quoted, "\"nemo.claw.example\" = " + quoted]) if os.environ["PHOENIX_ENABLED"] == "true" and project else ""; rendered = template.replace("@@PHOENIX_ENABLED@@", os.environ["PHOENIX_ENABLED"]).replace("@@PHOENIX_ENDPOINT@@", os.environ["PHOENIX_ENDPOINT"]).replace("@@OPENINFERENCE_RESOURCE_ATTRIBUTES@@", attrs); Path("/etc/nemo-relay/plugins.toml").write_text(rendered)' \
     && rm /tmp/nemo-relay-plugins.toml.in \
     && chmod 444 /etc/nemo-relay/plugins.toml
 
@@ -337,6 +339,7 @@ ENV NEMOCLAW_MODEL=${NEMOCLAW_MODEL} \
     OUTLOOK_REPLY_TO=${OUTLOOK_REPLY_TO} \
     OUTLOOK_ALLOWED_SENDERS=${OUTLOOK_ALLOWED_SENDERS} \
     GITHUB_READONLY_REPO=${GITHUB_READONLY_REPO} \
+    NEMO_RELAY_PROJECT_NAME=${NEMO_RELAY_PROJECT_NAME} \
     MS_GRAPH_SERVICES=${MS_GRAPH_SERVICES} \
     SOURCE_ETL_GITHUB_REPO=${SOURCE_ETL_GITHUB_REPO} \
     SOURCE_ETL_FORUM_TAG=${SOURCE_ETL_FORUM_TAG} \

@@ -410,6 +410,7 @@ unless you remove the compose volumes.
 | `SOURCE_ETL_GITHUB_REPO` | `NVIDIA/NemoClaw` | Host-side GitHub mirror repo for source-etls. This is independent of `GITHUB_READONLY_REPO`. |
 | `TOKEN_MANAGER_HOST` | `host.openshell.internal` | Host where the MS Graph token manager is reachable from inside the sandbox. |
 | `PHOENIX_COLLECTOR_ENDPOINT` | (none) | Set to e.g. `http://host.openshell.internal:6006/v1/traces` to stream OpenInference traces to a Phoenix collector. ATIF trace generation does not depend on this — NeMo-Relay is always installed and writes ATIF locally to `/tmp/atif/` regardless. |
+| `NEMO_RELAY_PROJECT_NAME` | (NeMo Relay default) | Optional Phoenix project name for OpenInference traces. When set with `PHOENIX_COLLECTOR_ENDPOINT`, `03-sandbox.sh` bakes it into NeMo Relay's OpenInference resource attributes as `openinference.project.name`. |
 
 ## Verification (what success looks like)
 

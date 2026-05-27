@@ -22,3 +22,4 @@ transport = "http_binary"
 endpoint = "@@PHOENIX_ENDPOINT@@"
 service_name = "hermes-agent"
 timeout_millis = 3000
+@@OPENINFERENCE_RESOURCE_ATTRIBUTES@@

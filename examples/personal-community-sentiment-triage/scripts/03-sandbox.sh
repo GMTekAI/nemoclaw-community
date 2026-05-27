@@ -135,8 +135,16 @@ fi
 # the user hasn't configured a collector.
 if [[ -n "${PHOENIX_COLLECTOR_ENDPOINT:-}" ]]; then
   echo "Phoenix endpoint: $PHOENIX_COLLECTOR_ENDPOINT — enabling OpenInference egress"
+  if [[ -n "${NEMO_RELAY_PROJECT_NAME:-}" ]]; then
+    echo "Phoenix project:  $NEMO_RELAY_PROJECT_NAME"
+  fi
   sed -i \
     -e "s|^ARG PHOENIX_COLLECTOR_ENDPOINT=.*|ARG PHOENIX_COLLECTOR_ENDPOINT=$PHOENIX_COLLECTOR_ENDPOINT|" \
+    "$STAGED_DOCKERFILE"
+fi
+if [[ -n "${NEMO_RELAY_PROJECT_NAME:-}" ]]; then
+  sed -i \
+    -e "s|^ARG NEMO_RELAY_PROJECT_NAME=.*|ARG NEMO_RELAY_PROJECT_NAME=$NEMO_RELAY_PROJECT_NAME|" \
     "$STAGED_DOCKERFILE"
 fi
 
@@ -184,6 +192,7 @@ setsid openshell sandbox create \
     NEMOCLAW_MESSAGING_CHANNELS_B64="$CHANNELS_B64" \
     CHAT_UI_URL="http://127.0.0.1:8642" \
     PHOENIX_COLLECTOR_ENDPOINT="${PHOENIX_COLLECTOR_ENDPOINT:-}" \
+    NEMO_RELAY_PROJECT_NAME="${NEMO_RELAY_PROJECT_NAME:-}" \
   nemoclaw-start </dev/null &
 CREATE_PID=$!
 
