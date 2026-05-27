@@ -38,9 +38,11 @@ RUN pyinstaller \
 # ── Stage 1: build the nemo-relay CLI binary ──────────────────────────────────
 # Built inside ${BASE_IMAGE} so the resulting binary links against the same
 # glibc as the runtime — same constraint as the sidecar-builder stage above.
-# 0.3.0-beta.2 is the first NeMo Relay release on crates.io. `cargo install` is
-# the simplest reproducible path; the ~3-5 min toolchain bootstrap is amortized
-# across the cargo target cache when the version pin doesn't change.
+# 0.3.0-beta.2 is the first NeMo-Relay release on crates.io (the predecessor
+# crate `nemo-flow-cli` was published through 0.2.0 before the project's rename
+# from NeMo-Flow). `cargo install` is the simplest reproducible path; the
+# ~3-5 min toolchain bootstrap is amortized across the cargo target cache when
+# the version pin doesn't change.
 FROM ${BASE_IMAGE} AS nemo-relay-builder
 ARG NEMO_RELAY_CLI_VERSION=0.3.0-beta.2
 RUN apt-get update -qq \
