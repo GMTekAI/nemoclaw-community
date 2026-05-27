@@ -29,8 +29,6 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-_MAX_PAYLOAD_BYTES = 262_144  # 256 KiB; keep hook payloads bounded for the sidecar.
-_COMPACT_REQUEST_BODY_BYTES = 180_000
 _OPENSHELL_PLACEHOLDER_RE = re.compile(r"openshell:resolve:env:[A-Za-z0-9_:-]+")
 
 _LOCK = threading.Lock()
@@ -231,130 +229,13 @@ def _serialize_response_object(response: Any) -> Optional[dict]:
     return None
 
 
-def _json_size(value: Any) -> int:
-    try:
-        return len(json.dumps(value, default=str, ensure_ascii=False).encode("utf-8"))
-    except Exception:
-        return len(repr(value).encode("utf-8"))
-
-
-def _truncate_text(value: str, limit: int) -> str:
-    if limit <= 0 or len(value) <= limit:
-        return value
-    if limit < 128:
-        return value[:limit]
-    marker = f"\n...[truncated {len(value) - limit} chars for Phoenix payload cap]...\n"
-    head = max(1, (limit - len(marker)) // 2)
-    tail = max(1, limit - len(marker) - head)
-    return value[:head] + marker + value[-tail:]
-
-
-def _compact_content(value: Any, limit: int) -> Any:
-    if isinstance(value, str):
-        return _truncate_text(value, limit)
-    if value is None or isinstance(value, (int, float, bool)):
-        return value
-    try:
-        rendered = json.dumps(_safe_jsonable(value), ensure_ascii=False, default=str)
-    except Exception:
-        rendered = repr(value)
-    return _truncate_text(rendered, limit)
-
-
-def _compact_messages(messages: list, target_bytes: int) -> list:
-    """Preserve Phoenix-visible role/content input under the hook payload cap.
-
-    Small requests keep the exact existing behavior. For very large Hermes
-    prompts, the old fallback removed request.body entirely, so Phoenix showed
-    only {"api_mode": "chat_completions"}. This keeps every message role and a
-    bounded head/tail slice of content, with larger budgets for the system
-    prompt and the latest conversation turns.
-    """
-    if not messages:
-        return messages
-    safe_messages = _safe_jsonable(messages)
-    if _json_size({"messages": safe_messages}) <= target_bytes:
-        return safe_messages
-
-    count = len(safe_messages)
-    compacted = []
-    for idx, message in enumerate(safe_messages):
-        if not isinstance(message, dict):
-            message = {"role": "unknown", "content": message}
-        item = dict(message)
-        if idx == 0:
-            limit = 24_000
-        elif idx >= count - 8:
-            limit = 6_000
-        else:
-            limit = 900
-        if "content" in item:
-            item["content"] = _compact_content(item.get("content"), limit)
-        compacted.append(item)
-
-    body = {"messages": compacted}
-    while _json_size(body) > target_bytes:
-        changed = False
-        for idx, item in enumerate(compacted):
-            content = item.get("content")
-            if not isinstance(content, str) or len(content) <= 320:
-                continue
-            limit = 2_000 if idx == 0 else 320
-            item["content"] = _truncate_text(content, limit)
-            changed = True
-        if not changed:
-            break
-    return compacted
-
-
-def _compact_request_body(body: Any) -> Any:
-    if not isinstance(body, dict):
-        return body
-    compacted = dict(body)
-    messages = compacted.get("messages")
-    if isinstance(messages, list):
-        compacted["messages"] = _compact_messages(messages, _COMPACT_REQUEST_BODY_BYTES)
-        compacted["observability_truncated"] = True
-        compacted["observability_note"] = (
-            "Request messages were compacted to fit the NeMo Relay hook payload cap; "
-            "roles and head/tail content slices are preserved for Phoenix."
-        )
-        compacted["observability_original_message_count"] = len(messages)
-    return compacted
-
-
 # ---------------------------------------------------------------------------
 # Forwarder
 # ---------------------------------------------------------------------------
 
-def _cap_payload(payload: dict) -> dict:
-    """Keep hook payloads bounded without losing Phoenix-visible LLM input."""
-    payload = _sanitize_observability_value(payload)
-    try:
-        encoded = json.dumps(payload, default=str)
-    except Exception:
-        return payload
-    if len(encoded) <= _MAX_PAYLOAD_BYTES:
-        return payload
-    trimmed = dict(payload)
-    request = trimmed.get("request")
-    if isinstance(request, dict) and "body" in request:
-        request = dict(request)
-        request["body"] = _compact_request_body(request.get("body"))
-        trimmed["request"] = request
-        try:
-            encoded = json.dumps(trimmed, default=str)
-        except Exception:
-            return trimmed
-        if len(encoded) <= _MAX_PAYLOAD_BYTES:
-            return trimmed
-    response = trimmed.get("response")
-    if isinstance(response, dict):
-        response = dict(response)
-        response.pop("raw_response", None)
-        response.pop("assistant_message", None)
-        trimmed["response"] = response
-    return trimmed
+def _prepare_payload(payload: dict) -> Any:
+    """Coerce hook payloads to JSON-safe values and redact placeholders."""
+    return _sanitize_observability_value(_safe_jsonable(payload))
 
 
 def _forward(payload: dict) -> None:
@@ -365,7 +246,7 @@ def _forward(payload: dict) -> None:
     if client is None:
         return
     try:
-        client.post(f"{url}/hooks/hermes", json=_cap_payload(payload))
+        client.post(f"{url}/hooks/hermes", json=_prepare_payload(payload))
     except Exception as exc:
         logger.debug("nemo-relay: forward to %s failed: %s", url, exc)
 
