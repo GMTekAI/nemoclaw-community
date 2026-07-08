@@ -3,8 +3,8 @@ title:
   page: "Verify Skill Functionality"
   nav: "Verify Skills"
 description:
-  main: "Walk through 10 conversational prompts plus a live GitHub check that prove the core Hermes workflow skills end-to-end across Slack DM, Slack thread, and Outlook email channels."
-  agent: "End-to-end functional verification recipe for the personal-community-sentiment-triage example. Contains 10 copy-pasteable prompts covering outlook-email-search, slack-channel-finder, slack-channel-summarizer, source-etl-query, and cross-source-gap-analysis, plus a live github-readonly-live check. Each prompt has a stated expected behavior and a specific verification cue. Use after running scripts/bring-up.sh and confirming the README's plumbing checks pass — this guide picks up where the README's plumbing verification stops."
+  main: "Walk through 13 conversational prompts plus a live GitHub check that prove the core Hermes workflow skills and NVTeam routing end-to-end across Slack DM, Slack thread, and Outlook email channels."
+  agent: "End-to-end functional verification recipe for the personal-community-sentiment-triage example. Contains 13 copy-pasteable prompts covering outlook-email-search, slack-channel-finder, slack-channel-summarizer, source-etl-query, cross-source-gap-analysis, and nemoclaw-enterprise-nvteam, plus a live github-readonly-live check. Each prompt has a stated expected behavior and a specific verification cue. Use after running scripts/bring-up.sh and confirming the README's plumbing checks pass — this guide picks up where the README's plumbing verification stops."
 keywords: ["verify nemoclaw skills", "hermes skill verification", "slack outlook smoke test", "personal community sentiment triage verification"]
 topics: ["generative_ai", "ai_agents"]
 tags: ["hermes", "openshell", "outlook", "slack", "verification", "smoke-test"]
@@ -24,9 +24,9 @@ status: published
 
 # Verify Skill Functionality
 
-Ten copy-pasteable prompts plus a live GitHub check that prove each skill works end-to-end across Slack and Outlook. The README's [§ Verification](../README.md#verification-what-success-looks-like) only checks plumbing (the bridge runs, the sidecar exists, scripts return `ok: true`). This guide picks up where that stops: it checks whether the **agent** can use its skills correctly.
+Thirteen copy-pasteable prompts plus a live GitHub check that prove each skill works end-to-end across Slack and Outlook. The README's [§ Verification](../README.md#verification-what-success-looks-like) only checks plumbing (the bridge runs, the sidecar exists, scripts return `ok: true`). This guide picks up where that stops: it checks whether the **agent** can use its skills correctly.
 
-Once you've run all 10, head to [collective-wisdom.md](collective-wisdom.md) for the cross-channel skill-learning demo — where one user teaches the agent a new skill, the skill survives a full sandbox rebuild, and a different user invokes it from a different channel and gets the same output format.
+Once you've run all 13, head to [collective-wisdom.md](collective-wisdom.md) for the cross-channel skill-learning demo — where one user teaches the agent a new skill, the skill survives a full sandbox rebuild, and a different user invokes it from a different channel and gets the same output format.
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ A few constraints to keep in mind:
 
 ---
 
-## The 10 prompts
+## The 13 prompts
 
 For each skill there's a **smoke** test (deterministic, proves the wiring) and a **realistic** test (exercises the full code path, judged by reading the reply). Channels alternate so both bridges get exercised.
 
@@ -65,6 +65,9 @@ For each skill there's a **smoke** test (deterministic, proves the wiring) and a
 | Q8 | source-etl-query            | realistic | Outlook email |
 | Q9 | cross-source-gap-analysis   | smoke     | Slack DM      |
 | Q10| cross-source-gap-analysis   | realistic | Outlook email |
+| Q11| nemoclaw-enterprise-nvteam  | smoke     | Slack DM      |
+| Q12| nemoclaw-enterprise-nvteam  | smoke     | Slack DM      |
+| Q13| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
 
 Every question below uses the same shape:
 
@@ -239,6 +242,45 @@ should use the separate `github-readonly-live` skill for `GITHUB_READONLY_REPO`.
 
 **Expected:** agent picks a channel via `slack-channel-finder`, summarizes via `slack-channel-summarizer`, queries live issues through `github-readonly-live`, normalizes both, presents a 4-section reply.
 **Verify:** reply contains all four documented section headings — `scope and time window`, `what all sources agree on`, `gaps or mismatches`, `concrete follow-ups` — and grounds each gap in a specific channel message or GitHub issue number, not generic abstractions.
+
+---
+
+### nemoclaw-enterprise-nvteam
+
+#### Q11 — smoke
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> Is River available?
+
+**Expected:** agent loads `nemoclaw-enterprise-nvteam`, the River persona card,
+and the Slack response profile without inspecting or changing model or runtime
+configuration.
+**Verify:** reply begins `River active —`, does not present River as a model,
+configuration, or separate agent, and ends `RESULT — River activated.`
+
+#### Q12 — smoke
+
+**Send via:** a second fresh Slack DM thread to `@myuser_nemoclaw`
+
+> use nvteam river
+
+**Expected:** same activation behavior as Q11 through the explicit NVTeam form.
+**Verify:** reply begins `River active —`, grants no permission or authority,
+and ends `RESULT — River activated.`
+
+#### Q13 — realistic
+
+**Send via:** a third fresh Slack DM thread to `@myuser_nemoclaw`
+
+> Desired outcome: community growth. No confirmed user segment, problem evidence, baseline, target, owner, date, mentor capacity, API stability, dependency evidence, or accepted mission is supplied. Frame the product decision without filling the gaps.
+
+**Expected:** automatic routing selects River, preserves community growth as
+the only supplied outcome, and proposes one coherent learning-oriented V0.
+**Verify:** the substantive response labels unsupported current state `NOT
+VERIFIED`; labels every new target, threshold, date, owner, dependency, sample
+size, measure, and V0 `PROPOSED`; invents no commitment; asks for the next
+product decision; and ends with one `RESULT`, `PARTIAL`, or `BLOCKED` line.
 
 ---
 

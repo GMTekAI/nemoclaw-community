@@ -186,6 +186,13 @@ Skills are loaded on demand by the agent when relevant to a task. They live in [
 | `outlook-email-search` | Search the Outlook mailbox via Microsoft Graph to find and read emails relevant to a question. |
 | `cross-source-gap-analysis` | Synthesize findings across Slack, GitHub, and NVIDIA forum sources to identify gaps, alignment issues, and follow-ups. |
 | `nemoclaw-autoheal` | Guide users through sandbox health checks and optional host-side auto-heal setup. |
+| `nemoclaw-enterprise-nvteam` | Route product, delivery, engineering, quality, operations, security, and developer-relations work through seven evidence-bounded role lenses. |
+
+The NVTeam package was validated from source revision
+`2b030d57c8d11faf426e06105339ed990ac93e7c` with relative-file tree SHA-256
+`964bbd009ccab7ee2f7b379ec11e0569f250e547818e68ab95a3c6245f8bbdcd`.
+Its authority behavior is disabled unless a separately provisioned registry is
+present and valid; this example includes only the synthetic schema and example.
 
 ## Intended user journey
 
