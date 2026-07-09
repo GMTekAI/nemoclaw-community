@@ -194,6 +194,11 @@ The NVTeam package was validated from source revision
 Its authority behavior is disabled unless a separately provisioned registry is
 present and valid; this example includes only the synthetic schema and example.
 
+The seven role lenses are the PM person (River), TPM person (Quinn), backend
+and systems engineering person (Akira), QA person (Robin), SRE person (Alex),
+security person (Morgan), and DevRel/TME person (Parker). These labels describe
+role lenses, not real people, separate agents, models, or configurations.
+
 ## Intended user journey
 
 The bring-up has two distinct halves: a host-side bootstrap (Docker services that hold

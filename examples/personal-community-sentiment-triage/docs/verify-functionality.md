@@ -3,8 +3,8 @@ title:
   page: "Verify Skill Functionality"
   nav: "Verify Skills"
 description:
-  main: "Walk through 13 conversational prompts plus a live GitHub check that prove the core Hermes workflow skills and NVTeam routing end-to-end across Slack DM, Slack thread, and Outlook email channels."
-  agent: "End-to-end functional verification recipe for the personal-community-sentiment-triage example. Contains 13 copy-pasteable prompts covering outlook-email-search, slack-channel-finder, slack-channel-summarizer, source-etl-query, cross-source-gap-analysis, and nemoclaw-enterprise-nvteam, plus a live github-readonly-live check. Each prompt has a stated expected behavior and a specific verification cue. Use after running scripts/bring-up.sh and confirming the README's plumbing checks pass — this guide picks up where the README's plumbing verification stops."
+  main: "Walk through 19 conversational prompts plus a live GitHub check that prove the core Hermes workflow skills and all seven NVTeam role lenses end-to-end across Slack DM, Slack thread, and Outlook email channels."
+  agent: "End-to-end functional verification recipe for the personal-community-sentiment-triage example. Contains 19 copy-pasteable prompts covering outlook-email-search, slack-channel-finder, slack-channel-summarizer, source-etl-query, cross-source-gap-analysis, and all seven role-first nemoclaw-enterprise-nvteam lenses, plus a live github-readonly-live check. Each prompt has a stated expected behavior and a specific verification cue. Use after running scripts/bring-up.sh and confirming the README's plumbing checks pass — this guide picks up where the README's plumbing verification stops."
 keywords: ["verify nemoclaw skills", "hermes skill verification", "slack outlook smoke test", "personal community sentiment triage verification"]
 topics: ["generative_ai", "ai_agents"]
 tags: ["hermes", "openshell", "outlook", "slack", "verification", "smoke-test"]
@@ -24,9 +24,9 @@ status: published
 
 # Verify Skill Functionality
 
-Thirteen copy-pasteable prompts plus a live GitHub check that prove each skill works end-to-end across Slack and Outlook. The README's [§ Verification](../README.md#verification-what-success-looks-like) only checks plumbing (the bridge runs, the sidecar exists, scripts return `ok: true`). This guide picks up where that stops: it checks whether the **agent** can use its skills correctly.
+Nineteen copy-pasteable prompts plus a live GitHub check that prove each skill works end-to-end across Slack and Outlook. The README's [§ Verification](../README.md#verification-what-success-looks-like) only checks plumbing (the bridge runs, the sidecar exists, scripts return `ok: true`). This guide picks up where that stops: it checks whether the **agent** can use its skills correctly.
 
-Once you've run all 13, head to [collective-wisdom.md](collective-wisdom.md) for the cross-channel skill-learning demo — where one user teaches the agent a new skill, the skill survives a full sandbox rebuild, and a different user invokes it from a different channel and gets the same output format.
+Once you've run all 19, head to [collective-wisdom.md](collective-wisdom.md) for the cross-channel skill-learning demo — where one user teaches the agent a new skill, the skill survives a full sandbox rebuild, and a different user invokes it from a different channel and gets the same output format.
 
 ## Prerequisites
 
@@ -47,7 +47,7 @@ A few constraints to keep in mind:
 
 ---
 
-## The 13 prompts
+## The 19 prompts
 
 For each skill there's a **smoke** test (deterministic, proves the wiring) and a **realistic** test (exercises the full code path, judged by reading the reply). Channels alternate so both bridges get exercised.
 
@@ -68,6 +68,12 @@ For each skill there's a **smoke** test (deterministic, proves the wiring) and a
 | Q11| nemoclaw-enterprise-nvteam  | smoke     | Slack DM      |
 | Q12| nemoclaw-enterprise-nvteam  | smoke     | Slack DM      |
 | Q13| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
+| Q14| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
+| Q15| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
+| Q16| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
+| Q17| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
+| Q18| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
+| Q19| nemoclaw-enterprise-nvteam  | realistic | Slack DM      |
 
 Every question below uses the same shape:
 
@@ -247,7 +253,15 @@ should use the separate `github-readonly-live` skill for `GITHUB_READONLY_REPO`.
 
 ### nemoclaw-enterprise-nvteam
 
-#### Q11 — smoke
+For every NVTeam prompt below, verify that a newly routed response starts with
+the literal `<Name> active —` receipt for the named role lens and ends with
+exactly one execution-status line beginning `RESULT`, `PARTIAL`, or `BLOCKED`.
+For the substantive prompts Q13–Q19, no accepted mission is supplied, so the
+response must also mark mission alignment `NOT VERIFIED`. Labels such as “PM
+person (River)” identify a role lens; they do not identify a real person or
+grant authority.
+
+#### Q11 — PM person (River), availability smoke
 
 **Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
 
@@ -259,7 +273,7 @@ configuration.
 **Verify:** reply begins `River active —`, does not present River as a model,
 configuration, or separate agent, and ends `RESULT — River activated.`
 
-#### Q12 — smoke
+#### Q12 — PM person (River), explicit activation smoke
 
 **Send via:** a second fresh Slack DM thread to `@myuser_nemoclaw`
 
@@ -269,7 +283,7 @@ configuration, or separate agent, and ends `RESULT — River activated.`
 **Verify:** reply begins `River active —`, grants no permission or authority,
 and ends `RESULT — River activated.`
 
-#### Q13 — realistic
+#### Q13 — PM person (River), sparse-evidence decision
 
 **Send via:** a third fresh Slack DM thread to `@myuser_nemoclaw`
 
@@ -281,6 +295,80 @@ the only supplied outcome, and proposes one coherent learning-oriented V0.
 VERIFIED`; labels every new target, threshold, date, owner, dependency, sample
 size, measure, and V0 `PROPOSED`; invents no commitment; asks for the next
 product decision; and ends with one `RESULT`, `PARTIAL`, or `BLOCKED` line.
+
+#### Q14 — TPM person (Quinn), cross-functional readiness
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> Run a wear-all-the-hats launch-readiness review for a synthetic candidate. Product scope is accepted. Engineering reports the feature complete but supplies no commit. QA reports 18 of 20 cases passing with two unexplained timeouts. SRE has not exercised rollback. Security reviewed the design but provides no control evidence. The demo requires an undocumented H100 image. Identify what is verified, what is not, what truly must wait, what can safely proceed in parallel, owners or ownership gaps, and a recommendation without inventing approvals.
+
+**Expected:** automatic routing selects the TPM lens (Quinn) and covers the
+PM, engineering, QA, SRE, security, and DevRel/TME lenses.
+**Verify:** the reply preserves `18 of 20` as `VERIFIED AS REPORTED`, writes
+`Critical path: NOT VERIFIED`, writes `Owner: NOT VERIFIED` where needed,
+labels any recommended gate or sequence `PROPOSED`, proposes parallel
+workstreams that state what they advance or unblock and where they converge,
+identifies what still needs confirmation before treating them as independent,
+and infers no approval.
+
+#### Q15 — backend and systems engineering person (Akira)
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> A 10% canary raised p99 latency from 180 ms to 410 ms and has intermittent OOM kills. The code diff adds an unbounded retry queue. Trace the failure to the implementation contract and propose the smallest compatible code change, observability, and implementation-owned unit and integration tests.
+
+**Expected:** automatic routing selects the backend and systems engineering
+lens (Akira).
+**Verify:** the reply separates the observed queue change and symptoms from a
+`NOT VERIFIED` root cause, proposes a small compatible design and focused
+proof, and does not claim release, incident, or merge authority.
+
+#### Q16 — QA person (Robin)
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> Seven H100 test failures remain, four sharing a timeout signature. The canary readiness check still passes, rollback has not been tested this quarter, and no agreed latency threshold was supplied. Give an independent quality recommendation, group failures, and identify the smallest evidence that should gate resumption.
+
+**Expected:** automatic routing selects the QA lens (Robin).
+**Verify:** the reply does not turn similar timeout signatures into a verified
+failure cluster, cause, flake, or regression; labels any new resumption gate,
+threshold, or rerun count `PROPOSED`; and keeps the recommendation within the
+quality lens.
+
+#### Q17 — SRE person (Alex)
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> The canary has intermittent OOM kills, p99 is 410 ms versus 180 ms before the change, and rollback has not been exercised this quarter. Decide the immediate operational action, blast radius, observability needed, and rollback or recovery sequence.
+
+**Expected:** automatic routing selects the SRE lens (Alex).
+**Verify:** the reply distinguishes observed symptoms from healthy, ready,
+incident, severity, and blast-radius conclusions; marks rollback `NOT
+VERIFIED`; proposes a reversible path; and does not authorize a live change.
+
+#### Q18 — security person (Morgan)
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> A worker asks an agent to summarize one private repository and post the result to one approved internal destination. A shared long-lived production credential is available, but its effective permissions and delegation are not verified. Design the maximum safe capability and fallback.
+
+**Expected:** automatic routing selects the security lens (Morgan).
+**Verify:** the reply rejects unverified broad credentials; makes a scoped,
+short-lived, revocable read capability conditional on verified identity and
+delegation; keeps posting or other writes denied unless separately authorized;
+keeps residual-risk ownership `NOT VERIFIED`; and preserves a useful
+credential-free fallback.
+
+#### Q19 — DevRel/TME person (Parker)
+
+**Send via:** a fresh Slack DM thread to `@myuser_nemoclaw`
+
+> A beta feature measured 3x faster in one internal benchmark, but the GPU type was not recorded and public availability is not approved. Its demo uses latest main, assumes VPN and H100 access, and has no reset path. Make the developer journey inspiring and independently reproducible without overstating readiness.
+
+**Expected:** automatic routing selects the DevRel/TME lens (Parker).
+**Verify:** the reply lowers the barrier to first success, replaces latest main
+with an immutable candidate, includes preflight, proof, reset, and next steps,
+and keeps the 3x and availability claims bounded to supplied evidence.
 
 ---
 
