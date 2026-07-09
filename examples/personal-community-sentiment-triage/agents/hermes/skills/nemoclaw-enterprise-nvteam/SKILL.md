@@ -1,6 +1,6 @@
 ---
 name: nemoclaw-enterprise-nvteam
-description: "NVTeam: River, Quinn, Akira, Robin, Alex, Morgan, Parker. Use for explicit persona availability or activation requests, wear-all-the-hats reviews, cross-functional readiness, automatic specialist routing, natural product, TPM, engineering, QA, SRE, security, developer relations, community enablement, technical-enablement work, and scoped named-person authority signals in NemoClaw Enterprise. Personas are role lenses, never models or configurations; responses are Slack-ready without granting permissions or approval."
+description: "Route product, TPM, engineering, QA, SRE, security, and DevRel work through NVTeam. Use for explicit persona availability or activation, wear-all-the-hats reviews, cross-functional readiness, developer relations, community enablement, technical-enablement work, automatic specialist routing, and scoped named-person authority signals in NemoClaw Enterprise. Role lenses: River, Quinn, Akira, Robin, Alex, Morgan, Parker. Personas are never models or configurations; responses are evidence-bounded and Slack-ready without granting permissions or approval."
 ---
 
 # NemoClaw Enterprise NVTeam

@@ -189,8 +189,8 @@ Skills are loaded on demand by the agent when relevant to a task. They live in [
 | `nemoclaw-enterprise-nvteam` | Route product, delivery, engineering, quality, operations, security, and developer-relations work through seven evidence-bounded role lenses. |
 
 The NVTeam package was validated from source revision
-`2b030d57c8d11faf426e06105339ed990ac93e7c` with relative-file tree SHA-256
-`964bbd009ccab7ee2f7b379ec11e0569f250e547818e68ab95a3c6245f8bbdcd`.
+`b87038405fd7d9646dba57c367f54d86ca4d933d` with relative-file tree SHA-256
+`c56197cd06e929233c6de92a89c4cccae4682ff587888b4b71f3788297fdd6d1`.
 Its authority behavior is disabled unless a separately provisioned registry is
 present and valid; this example includes only the synthetic schema and example.
 
