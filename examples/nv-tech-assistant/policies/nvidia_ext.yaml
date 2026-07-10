@@ -1,0 +1,54 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+preset:
+  name: nvidia-ext
+  description: "NVIDIA website access"
+
+network_policies:
+  nvidia-ext:
+    name: nvidia-ext
+    endpoints:
+      - host: www.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: docs.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: developer.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: blogs.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: build.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: forums.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: catalog.ngc.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: nvidianews.nvidia.com
+        port: 443
+        access: full
+        tls: skip
+      - host: www.nvidia.cn
+        port: 443
+        access: full
+        tls: skip
+    binaries:
+      - { path: /usr/local/bin/node* }
+      - { path: /usr/bin/node* }
+      - { path: /usr/local/python* }
+      - { path: /usr/bin/python* }
+      - { path: /usr/local/curl* }
+      - { path: /usr/bin/curl* }

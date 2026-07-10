@@ -23,6 +23,7 @@ The table below lists examples maintained in this repository. Additional NemoCla
 | Hermes Brev Launchable | Provides a notebook path from a fresh Brev CPU instance to a working NemoClaw-managed Hermes sandbox, including installation, onboarding, API verification, and terminal access. | [Guide](examples/hermes-launchable/README.md) |
 | Harness Engineering Playground | A CLI dev tool (not an OpenShell blueprint) for automated, eval-driven harness profile improvement, with pluggable target-framework adapters and optimization techniques. | [Guide](examples/harness-engineering-playground/README.md) |
 | Retail Assistant | Deploys a Telegram-based retail management assistant that maps users to store roles, queries retail data through a FastAPI service, and runs the agent inside an OpenShell sandbox. | [Guide](examples/retail-assistant/README.md) |
+| NV Tech Assistant | Adds a skill that answers NVIDIA technical questions with cited evidence from authorized NVIDIA sources, and demonstrates adding custom skills and network policies to a running sandbox. | [Guide](examples/nv-tech-assistant/README.md) |
 
 ## Getting Started
 
