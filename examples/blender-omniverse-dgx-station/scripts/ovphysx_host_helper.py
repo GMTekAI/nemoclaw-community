@@ -422,6 +422,7 @@ def _replay(settings: Mapping[str, Any]) -> dict[str, Any]:
     completed = subprocess.run(
         [
             ffmpeg,
+            "-nostdin",
             "-y",
             "-framerate",
             str(gif_fps),
@@ -462,6 +463,39 @@ def _status(settings: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run_configured_demo(settings: Mapping[str, Any]) -> dict[str, Any]:
+    stages = (
+        ("preflight", _preflight, {"pass"}),
+        ("prepare", _prepare, {"pass", "not_required"}),
+        ("preview", _preview, {"pass"}),
+        ("simulate", _simulate, {"pass"}),
+        ("replay", _replay, {"pass"}),
+    )
+    results: dict[str, dict[str, Any]] = {}
+    for name, operation, accepted in stages:
+        result = operation(settings)
+        results[name] = result
+        if result.get("status") not in accepted:
+            return {
+                "status": "blocked" if name == "preflight" else "fail",
+                "failed_stage": name,
+                "receipt": result,
+            }
+
+    simulation = results["simulate"]
+    replay = results["replay"]
+    return {
+        "status": "pass",
+        "native_status": simulation.get("native_status"),
+        "physics_source": replay.get("physics_source"),
+        "render_class": replay.get("render_class"),
+        "sample_count": simulation.get("sample_count"),
+        "gif": replay.get("gif"),
+        "simulation_receipt": simulation.get("path"),
+        "replay_receipt": str(Path(settings["output_dir"]) / "replay-status.json"),
+    }
+
+
 def dispatch(request: Mapping[str, Any]) -> dict[str, Any]:
     action = str(request.get("action", "status"))
     settings = _settings(request)
@@ -472,6 +506,7 @@ def dispatch(request: Mapping[str, Any]) -> dict[str, Any]:
         "simulate": _simulate,
         "replay": _replay,
         "status": _status,
+        "run_configured_demo": _run_configured_demo,
     }
     if action not in actions:
         raise ValueError(f"unknown action {action!r}; expected one of {sorted(actions)}")

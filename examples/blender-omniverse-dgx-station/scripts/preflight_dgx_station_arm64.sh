@@ -173,7 +173,7 @@ section "Storage"
 target_model_serving=false
 if has_command curl; then
   model_response="$(curl -fsS --max-time 5 http://127.0.0.1:8000/v1/models 2>/dev/null || true)"
-  if grep -q 'nemotron-ultra' <<<"$model_response"; then
+  if grep -Eqi 'nemotron([_-]3)?[_-]ultra' <<<"$model_response"; then
     target_model_serving=true
   fi
 fi
@@ -379,9 +379,9 @@ if ! has_command ss; then
 else
   if port_is_listening 8000; then
     if $target_model_serving; then
-      pass "port 8000 already serves nemotron-ultra"
+      pass "port 8000 already serves the target Nemotron Ultra model"
     else
-      fail "port 8000 is occupied and does not report nemotron-ultra"
+      fail "port 8000 is occupied and does not report the target Nemotron Ultra model"
     fi
   else
     pass "port 8000 is available for Nemotron Ultra vLLM"

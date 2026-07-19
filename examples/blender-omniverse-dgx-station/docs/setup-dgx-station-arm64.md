@@ -508,7 +508,7 @@ env \
   OVRTX_ACTIVE_CUDA_GPUS=0 \
   blender "$DEMO_ROOT/scenes/thejunkshopsplashscreen.blend" \
   --python "$GUIDE_REPO/scripts/start_visible_blender_mcp.py" \
-  > "$DEMO_ROOT/out/visible-blender-mcp.log" 2>&1 &
+  > "$DEMO_ROOT/out/visible-blender-mcp.log" 2>&1 </dev/null &
 ```
 
 ### Validation
