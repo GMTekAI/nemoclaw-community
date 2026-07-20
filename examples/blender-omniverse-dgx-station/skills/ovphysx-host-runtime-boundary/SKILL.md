@@ -1,15 +1,37 @@
 ---
 name: ovphysx-host-runtime-boundary
-description: Route OVPhysX work correctly when Hermes runs in an OpenShell sandbox while the native OVRTX/OVPhysX runtime is installed beside a visible host Blender process.
+description: Run configured native OVPhysX demos and report host GIF/status receipts when Hermes is sandboxed but the OVRTX/OVPhysX runtime and visible Blender process are on the host.
 license: Apache-2.0
 metadata:
-  version: "0.3"
+  version: "0.4"
   domain: physical-ai
 ---
 # OVPhysX Host Runtime Boundary
 
 Use this skill together with the official `ovphysx-drop-contact-acceptance`
 skill for this guide's split deployment.
+
+When a task asks for the configured or guide-owned native OVPhysX demo, select
+this skill before generic scene-authoring skills. Use the installed helper and
+its defaults immediately; the currently open Blender scene is not the fixture
+and does not need to contain stairs or rigid bodies.
+
+For that configured-demo request, make one Blender MCP call with exactly this
+action and no overrides:
+
+```python
+import runpy
+from pathlib import Path
+helper = Path.home() / ".local/share/nemoclaw-blender/ovphysx_host_helper.py"
+runpy.run_path(
+    str(helper),
+    init_globals={"OVPHYSX_REQUEST": {"action": "run_configured_demo"}},
+)
+```
+
+Do not pass `fixture`, `output_dir`, `body_prims`, or the words from the user
+request as path overrides. The helper reads the configured absolute host paths
+and returns the final native simulation and GIF receipt in one bounded action.
 
 ## Topology
 
@@ -59,6 +81,8 @@ host helper. A successful helper action always appears as a
 
 Supported actions are:
 
+- `run_configured_demo`: run the complete configured demo and return its final
+  compact native simulation and GIF receipt. Prefer this for the guide demo.
 - `preflight`: inspect the installed host add-on and runtime.
 - `prepare`: run the configured fixture preparation script on the host.
 - `preview`: import the configured USD into visible Blender and render its
