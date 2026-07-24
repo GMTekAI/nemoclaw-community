@@ -1,86 +1,169 @@
 # NV Tech Assistant
 
-This example turns your NemoClaw agent into a grounded NVIDIA technical assistant. The `nv-tech-assistant` skill answers NVIDIA technical questions — "how do I use this SDK", "recommend an NVIDIA model for X", "how do I fix this TensorRT error" — by searching authorized NVIDIA sources (docs.nvidia.com, developer.nvidia.com, the NGC catalog, build.nvidia.com, the developer blog and forums, NVIDIA's GitHub orgs, the nvidia Hugging Face org, and arXiv) and citing real, verbatim-quoted evidence instead of answering from memory.
+NV Tech Assistant is a NemoClaw community example for grounded NVIDIA
+technical research. It searches authorized NVIDIA sources, GitHub, and arXiv,
+then answers with citations to evidence retrieved during the current task
+instead of relying on model memory.
 
-Beyond the skill itself, this example is a minimal, reusable recipe for two common customizations:
+Use it for questions such as:
 
-1. **Adding a custom skill** to a running sandbox — upload a folder, no rebuild.
-2. **Adding custom network policies** so the agent can reach the sites a skill needs — applied at runtime with a YAML file, no rebuild.
+- How do I use an NVIDIA SDK or find an official sample?
+- Which NVIDIA model, NIM, or library fits my use case?
+- How do I troubleshoot an NVIDIA SDK error?
+- Where is a documented NVIDIA customer success story?
 
-Both steps generalize directly to your own skills and policies.
-
-## Layout
-
-```
-nv-tech-assistant/
-├── policies/                      # network policies the skill needs
-│   ├── arxiv.yaml                 #   arxiv.org, export.arxiv.org
-│   ├── github_ext.yaml            #   github.com, api.github.com, raw.githubusercontent.com
-│   └── nvidia_ext.yaml            #   *.nvidia.com sites (docs, developer, build, NGC, ...)
-└── skills/
-    └── nv-tech-assistant/
-        ├── SKILL.md               # the skill: principles, workflow, question-type playbooks
-        └── references/
-            ├── nvidia-landscape.md            # product disambiguation map
-            ├── sources-and-search.md          # search recipes and URL patterns per source
-            ├── nemoclaw-network-policy.md     # how the agent helps you author new policies
-            └── nemoclaw-policy-template.yaml  # annotated policy template
-```
-
-## Prerequisites
-
-- A NemoClaw installation with an onboarded, running sandbox. If you haven't onboarded yet, follow the [NemoClaw](https://github.com/NVIDIA/NemoClaw) getting-started guide first.
-- **Recommended (optional):** enable Brave Web Search during onboarding and provide a [Brave Search API key](https://brave.com/search/api/). The skill prefers the `WebSearch` tool for scoped queries (`site:docs.nvidia.com`, ...) and falls back to the sources' structured search endpoints when it is unavailable — so the skill works without it, just better with it.
-
-## Step 1 — Add the network policies
-
-The skill needs outbound access to the NVIDIA sites, GitHub, and arXiv. The `./policies` directory contains the three policy files that open exactly those endpoints. Apply them from this directory on the host — the policies take effect immediately on the running sandbox, no rebuild needed:
+## Quickstart
 
 ```bash
-# apply the whole directory
-nemoclaw <sbx-name> policy-add --from-dir ./policies/ --yes
+git clone https://github.com/NVIDIA/nemoclaw-community.git
+cd nemoclaw-community/examples/nv-tech-assistant
+
+cp .env.example .env      # add NVIDIA_INFERENCE_API_KEY; Brave is optional
+bash scripts/onboard.sh   # create/configure the sandbox
+bash scripts/install.sh   # apply policies and install the skill
+bash scripts/start.sh     # ensure the sandbox is running
 ```
 
-Verify with:
+Ask a question non-interactively:
 
 ```bash
-nemoclaw <sbx-name> policy-list
+nemoclaw nv-tech-assistant agent --agent main -m \
+  "/nv_tech_assistant recommend an NVIDIA model for speech recognition"
 ```
 
-To write your own custom policy, use the YAML files in `./policies` as a reference, save it as `<domain-name>.yaml`, and apply it with `nemoclaw <sbx-name> policy-add --from-file <domain-name>.yaml`.
-
-## Step 2 — Add the skill
-
-Upload the skill folder directly to the sandbox — it is recognized by OpenClaw at runtime:
+Or connect to the sandbox and launch the OpenClaw TUI:
 
 ```bash
-nemoclaw <sbx-name> upload skills/nv-tech-assistant /sandbox/.openclaw/skills/
-```
-
-The same command works for any custom skill: a folder with a `SKILL.md` (plus optional `references/`) uploaded to `/sandbox/.openclaw/skills/`.
-
-## Step 3 — Try it
-
-Talk to the agent through the OpenClaw TUI:
-
-```bash
-nemoclaw <sbx-name> connect
+nemoclaw nv-tech-assistant connect
 openclaw tui
 ```
 
-or through any messaging channel you connected during onboarding. Example prompts (invoking `/nv_tech_assistant` at the start guarantees the skill is used):
+## Requirements
 
-- *"/nv_tech_assistant how can I get access to medium.com in the sandbox"*
-- *"/nv_tech_assistant recommend an NVIDIA model for speech recognition."*
-- *"/nv_tech_assistant I'm getting `CUDA error: out of memory` with Triton Inference Server — how do I fix it?"*
-- *"/nv_tech_assistant show me a real customer success story for NVIDIA Riva."*
+- Docker and [NemoClaw](https://github.com/NVIDIA/NemoClaw) installed.
+- An NVIDIA Endpoints API key from <https://build.nvidia.com>.
+- Optional: a Brave Search API key from <https://brave.com/search/api/>.
 
-Answers come back with inline citations to the exact pages the agent retrieved, and any code is quoted verbatim from official sources with a link.
+NVIDIA Endpoints is the default inference provider. When `BRAVE_API_KEY` is
+set, onboarding enables Brave Search. When it is blank, web search is disabled
+and the skill uses direct retrieval and structured search endpoints from its
+allowlisted sources. See [`.env.example`](.env.example) for the exact
+variables.
 
-## Bonus: the skill can author policies too
+## Commands
 
-The skill knows it runs inside a sandbox with restricted egress. When you want to open access to a new site — or the agent hits a source the network policy blocks — just ask it, for example:
+Create the sandbox using `.env`:
 
-- *"/nv_tech_assistant how can I get access to medium.com in the sandbox"*
+```bash
+bash scripts/onboard.sh
+```
 
-The agent drafts the policy YAML for the host(s) and hands you the exact `nemoclaw <sbx-name> policy-add --from-file <domain-name>.yaml` command to run on your host machine (it cannot change the policy from inside the sandbox).
+Apply the network policies and install or refresh the skill:
+
+```bash
+bash scripts/install.sh
+```
+
+Start or recover the sandbox:
+
+```bash
+bash scripts/start.sh
+```
+
+Stop the sandbox while preserving its workspace and credentials:
+
+```bash
+bash scripts/stop.sh
+```
+
+Restart it later with `scripts/start.sh`. To permanently delete the sandbox
+instead, run `nemoclaw nv-tech-assistant destroy` and confirm the destructive
+operation.
+
+Override the default sandbox name in `.env`:
+
+```env
+NEMOCLAW_SANDBOX_NAME=my-nv-tech-assistant
+```
+
+Use that name in direct `nemoclaw` commands as well.
+
+## How installation works
+
+`scripts/install.sh` performs two host-side operations:
+
+1. Applies every policy in `policies/` with `policy-add --from-dir`.
+2. Deploys `skills/nv-tech-assistant/` with `skill install`.
+
+Both operations target the sandbox named by `NEMOCLAW_SANDBOX_NAME`. Re-run
+the script after editing a policy, the skill, or one of its references.
+
+## Network policy
+
+The assistant receives read-only REST access to the sources it researches:
+
+- NVIDIA documentation, developer resources, blogs, forums, NGC, and
+  build.nvidia.com
+- NVIDIA repositories and files on GitHub
+- arXiv pages and its metadata export endpoint
+
+Every endpoint uses `access: read-only`, `protocol: rest`, and
+`enforcement: enforce`; ordinary HTTPS endpoints do not skip TLS inspection.
+Subdomains are not implied, so each required hostname is listed explicitly.
+
+To inspect the active presets:
+
+```bash
+nemoclaw nv-tech-assistant policy-list
+```
+
+The skill can also draft a least-privilege policy for a newly requested source.
+It cannot apply that policy from inside the sandbox; review and apply the YAML
+from the host.
+
+## Example prompts
+
+- `/nv_tech_assistant recommend an NVIDIA model for speech recognition`
+- `/nv_tech_assistant show an official TensorRT-LLM sample`
+- `/nv_tech_assistant I'm getting CUDA error: out of memory with Triton`
+- `/nv_tech_assistant show a documented customer success story for NVIDIA Riva`
+- `/nv_tech_assistant draft a read-only policy for medium.com`
+
+Answers include links to the exact pages retrieved. Code is included only when
+needed or requested and is quoted from its identified source.
+
+## Layout
+
+```text
+nv-tech-assistant/
+├── .env.example                    # NVIDIA inference and optional Brave settings
+├── policies/
+│   ├── arxiv.yaml                  # arxiv.org and export.arxiv.org
+│   ├── github_ext.yaml             # GitHub pages, API, and raw files
+│   └── nvidia_ext.yaml             # authorized NVIDIA sources
+├── scripts/
+│   ├── _lib.sh                     # shared environment and sandbox helpers
+│   ├── onboard.sh                  # create/configure the sandbox
+│   ├── install.sh                  # apply policies and deploy the skill
+│   ├── start.sh                    # start or recover the sandbox
+│   └── stop.sh                     # stop while preserving workspace state
+└── skills/
+    └── nv-tech-assistant/
+        ├── SKILL.md
+        └── references/
+            ├── nvidia-landscape.md
+            ├── sources-and-search.md
+            ├── nemoclaw-network-policy.md
+            └── nemoclaw-policy-template.yaml
+```
+
+## Security notes
+
+- The populated `.env` is ignored by Git; never commit API keys.
+- NemoClaw stores inference and Brave credentials through OpenShell provider
+  plumbing rather than writing raw keys into the sandbox configuration.
+- Brave is optional and is the only web-search provider configured by these
+  scripts.
+- The source policies are read-only and enforce inspected REST methods.
+- `scripts/stop.sh` preserves data. Permanent deletion requires the explicit
+  `nemoclaw <name> destroy` command.
