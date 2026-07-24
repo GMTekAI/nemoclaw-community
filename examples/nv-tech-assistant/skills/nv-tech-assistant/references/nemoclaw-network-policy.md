@@ -30,12 +30,14 @@ network_policies:
     endpoints:
       - host: arxiv.org            # one entry per hostname — subdomains are not implied
         port: 443
-        access: full               # "full" or "read-only" (GET/HEAD only)
-        tls: skip                  # optional: skip TLS inspection
+        access: read-only          # allow only GET/HEAD
+        protocol: rest
+        enforcement: enforce
       - host: export.arxiv.org
         port: 443
-        access: full
-        tls: skip
+        access: read-only
+        protocol: rest
+        enforcement: enforce
     binaries:                      # sandbox binaries allowed to use these endpoints
       - { path: /usr/local/bin/node* }
       - { path: /usr/bin/node* }
@@ -45,8 +47,17 @@ Field notes:
 
 - **`endpoints`** — list every hostname explicitly; allowing `example.com` does not allow
   `api.example.com`. Port is almost always 443.
-- **`access`** — use `read-only` for hosts you only fetch from; `full` when POSTs are needed
-  (APIs, search endpoints).
+- **`access`** — default to `read-only` for search, fetch, and download hosts. This permits
+  GET/HEAD and blocks writes. **DO NOT set `access: full` for an API endpoint unless it is
+  absolutely required by the user's requested workflow.** An endpoint being an API or supporting
+  search does not justify full access when GET/HEAD is sufficient. If full access is unavoidable,
+  identify the exact write method the workflow requires and explain why read-only access cannot
+  satisfy it.
+- **`protocol` and `enforcement`** — use `protocol: rest` with `enforcement: enforce` so the
+  endpoint's HTTP methods are inspected and the access restriction is enforced.
+- **TLS inspection** — do not add `tls: skip` for ordinary HTTPS sources. Use it only when TLS
+  inspection is incompatible with a required endpoint, and explain the reduced visibility and
+  security tradeoff to the user.
 - **`binaries`** — the standard node/python/curl set above covers WebFetch-style clients; reuse it
   as-is unless the user wants tighter restriction.
 

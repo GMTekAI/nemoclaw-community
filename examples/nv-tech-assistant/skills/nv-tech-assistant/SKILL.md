@@ -1,20 +1,15 @@
 ---
 name: nv-tech-assistant
 description: >-
-  Answer NVIDIA technical questions by searching authorized NVIDIA sources and citing real
-  evidence — never from memory. Use this whenever the user asks how to use an NVIDIA SDK or
-  library and wants sample code, asks you to recommend NVIDIA technology (an SDK, a Hugging Face
-  model, an NGC/GitHub asset) for a task, wants real-world adoption or success stories of an
-  NVIDIA product, is troubleshooting an NVIDIA SDK error or build/runtime issue, or is planning
-  how a product could integrate NVIDIA technology. Trigger it on any mention of an NVIDIA product,
-  GPU platform, SDK, library, framework, or model — including CUDA, cuDNN, TensorRT, TensorRT-LLM,
-  Triton, Dynamo, NIM, NeMo, Riva, DeepStream, Metropolis, Isaac, Omniverse, Holoscan, Morpheus,
-  Merlin, RAPIDS (cuDF/cuML), Cosmos, Nsight, NCCL, CUTLASS, and Jetson — and even when the user
-  doesn't name a specific product but clearly needs an NVIDIA solution ("what should I use on my
-  GPU to serve an LLM?"). It searches developer.nvidia.com, docs.nvidia.com, the NGC catalog,
-  build.nvidia.com, the NVIDIA developer blog and forums, NVIDIA's GitHub organizations, the
-  nvidia Hugging Face org, and arXiv, then answers with cited, verbatim-quoted evidence. It can
-  also write nemoclaw sandbox network-policy YAML files and walk the user through applying them
+  Answer NVIDIA technical questions by searching authorized sources and citing retrieved evidence
+  rather than relying on memory. Use for NVIDIA SDK or library usage and sample code, technology
+  recommendations (including models and NGC/GitHub assets), adoption stories, troubleshooting, and
+  product integration planning. Trigger on NVIDIA products, GPU platforms, SDKs, libraries,
+  frameworks, or models, including CUDA, cuDNN, TensorRT, TensorRT-LLM, Triton, Dynamo, NIM, NeMo,
+  Riva, DeepStream, Metropolis, Isaac, Omniverse, Holoscan, Morpheus, RAPIDS, Cosmos, Nsight, NCCL,
+  CUTLASS, and Jetson, or when a user clearly needs an NVIDIA solution without naming one. Search
+  official NVIDIA sites, NVIDIA GitHub organizations, the nvidia Hugging Face organization, and
+  arXiv. Also author least-privilege nemoclaw network-policy YAML and application instructions
   when a needed source is blocked. Prefer this skill over answering NVIDIA specifics directly.
 ---
 
@@ -195,6 +190,13 @@ If a source you need is blocked by the sandbox network policy — or the user as
 a new site — don't just report the gap: author a nemoclaw network-policy YAML for the blocked
 host(s) and walk the user through applying it. Read `references/nemoclaw-network-policy.md` for
 the full guide; `references/nemoclaw-policy-template.yaml` is an annotated starting point.
+
+Use least privilege for every endpoint. For sources that the assistant only searches, fetches, or
+downloads from, set `access: read-only`, `protocol: rest`, and `enforcement: enforce`. Do not set
+`tls: skip` for ordinary HTTPS endpoints. **DO NOT set `access: full` for an API endpoint unless
+it is absolutely required by the user's requested workflow.** An endpoint being an API or
+supporting search does not justify full access when GET/HEAD is sufficient. If broader access or
+skipped TLS inspection is unavoidable, explain the exact requirement and security tradeoff.
 
 You **cannot** apply the policy yourself — you are running inside the sandbox and are not allowed
 to change its network policy from within. Tell the user this explicitly. In short: give them the

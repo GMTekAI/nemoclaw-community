@@ -12,13 +12,15 @@ network_policies:
       # Main arXiv website and document download entry point
       - host: arxiv.org
         port: 443
-        access: full
-        tls: skip
+        access: read-only
+        protocol: rest
+        enforcement: enforce
       # arXiv API and metadata export endpoint
       - host: export.arxiv.org
         port: 443
-        access: full
-        tls: skip
+        access: read-only
+        protocol: rest
+        enforcement: enforce
     binaries:
       - { path: /usr/local/bin/node* }
       - { path: /usr/bin/node* }

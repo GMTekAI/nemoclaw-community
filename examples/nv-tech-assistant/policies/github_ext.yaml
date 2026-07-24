@@ -11,13 +11,19 @@ network_policies:
     endpoints:
     - host: github.com
       port: 443
-      access: full
+      access: read-only
+      protocol: rest
+      enforcement: enforce
     - host: api.github.com
       port: 443
-      access: full
+      access: read-only
+      protocol: rest
+      enforcement: enforce
     - host: raw.githubusercontent.com
       port: 443
       access: read-only
+      protocol: rest
+      enforcement: enforce
     binaries:
       - { path: /usr/local/bin/node* }
       - { path: /usr/bin/node* }
