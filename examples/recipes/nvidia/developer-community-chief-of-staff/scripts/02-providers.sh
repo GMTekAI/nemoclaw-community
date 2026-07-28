@@ -71,6 +71,15 @@ done
 
 # ── Inference provider (built-in nvidia v2 profile via inference.local) ─
 INFERENCE_KEY="${OPENAI_API_KEY:-${COMPATIBLE_API_KEY:-}}"
+INFERENCE_PREFLIGHT="${NEMOCLAW_INFERENCE_PREFLIGHT:-1}"
+case "$INFERENCE_PREFLIGHT" in
+  0|1) ;;
+  *)
+    echo "Invalid NEMOCLAW_INFERENCE_PREFLIGHT=$INFERENCE_PREFLIGHT (expected 0 or 1)" >&2
+    exit 1
+    ;;
+esac
+
 if [[ -n "$INFERENCE_KEY" ]]; then
   INFERENCE_PROVIDER="compatible-endpoint"
   INFERENCE_MODEL="${NEMOCLAW_MODEL:-nvidia/nemotron-3-super-120b-a12b}"
@@ -97,10 +106,27 @@ if [[ -n "$INFERENCE_KEY" ]]; then
         --credential NVIDIA_API_KEY --config "NVIDIA_BASE_URL=$INFERENCE_BASE_URL"
   fi
 
+  if [[ "$INFERENCE_PREFLIGHT" == "1" ]]; then
+    echo "Validating inference endpoint, credential, and model before sandbox creation"
+    env -i HOME="$HOME" PATH="$PATH" \
+      NEMOCLAW_INFERENCE_PREFLIGHT_KEY="$INFERENCE_KEY" \
+      python3 "$DIR/inference_preflight.py" \
+        --endpoint "$INFERENCE_BASE_URL" \
+        --model "$INFERENCE_MODEL" \
+        --timeout "${NEMOCLAW_INFERENCE_PREFLIGHT_TIMEOUT_SECONDS:-10}"
+  else
+    echo "WARNING: inference preflight bypassed (NEMOCLAW_INFERENCE_PREFLIGHT=0)" >&2
+  fi
+
   echo "Setting cluster inference: provider=$INFERENCE_PROVIDER model=$INFERENCE_MODEL"
   openshell inference set --no-verify --provider "$INFERENCE_PROVIDER" --model "$INFERENCE_MODEL"
 else
-  echo "WARNING: neither OPENAI_API_KEY nor COMPATIBLE_API_KEY is set — skipping inference provider. The agent will have no LLM." >&2
+  if [[ "$INFERENCE_PREFLIGHT" == "1" ]]; then
+    echo "Inference preflight failed (configuration): neither OPENAI_API_KEY nor COMPATIBLE_API_KEY is set." >&2
+    echo "Set a credential, or set NEMOCLAW_INFERENCE_PREFLIGHT=0 for intentional offline setup." >&2
+    exit 1
+  fi
+  echo "WARNING: inference preflight bypassed and no credential is set. The agent will have no LLM." >&2
 fi
 
 # ── Outlook provider with gateway-managed OAuth refresh ─────────────────
