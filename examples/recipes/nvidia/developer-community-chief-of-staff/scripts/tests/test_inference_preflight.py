@@ -38,6 +38,9 @@ class InferencePreflightTest(TestCase):
     def test_valid_configuration_uses_bounded_completion(self) -> None:
         response = MagicMock()
         response.status = 200
+        response.read.return_value = (
+            b'{"choices":[{"message":{"content":"OK"}}]}'
+        )
         response.__enter__.return_value = response
         with patch.object(PREFLIGHT.urllib.request, "urlopen", return_value=response) as open_:
             PREFLIGHT.run_preflight(
@@ -123,8 +126,32 @@ class InferencePreflightTest(TestCase):
             with self.assertRaises(PREFLIGHT.PreflightError) as raised:
                 PREFLIGHT.run_preflight(
                     "https://example.test/v1", "nvidia/test-model", "secret", 4
-                )
+        )
         self.assertEqual(raised.exception.category, "provider-availability")
+
+    def test_non_json_success_is_provider_response_failure(self) -> None:
+        response = MagicMock()
+        response.status = 200
+        response.read.return_value = b"<html>proxy login</html>"
+        response.__enter__.return_value = response
+        with patch.object(PREFLIGHT.urllib.request, "urlopen", return_value=response):
+            with self.assertRaises(PREFLIGHT.PreflightError) as raised:
+                PREFLIGHT.run_preflight(
+                    "https://example.test/v1", "nvidia/test-model", "secret", 4
+                )
+        self.assertEqual(raised.exception.category, "provider-response")
+
+    def test_success_without_choice_is_provider_response_failure(self) -> None:
+        response = MagicMock()
+        response.status = 200
+        response.read.return_value = b'{"choices":[]}'
+        response.__enter__.return_value = response
+        with patch.object(PREFLIGHT.urllib.request, "urlopen", return_value=response):
+            with self.assertRaises(PREFLIGHT.PreflightError) as raised:
+                PREFLIGHT.run_preflight(
+                    "https://example.test/v1", "nvidia/test-model", "secret", 4
+                )
+        self.assertEqual(raised.exception.category, "provider-response")
 
     def test_display_endpoint_removes_credentials_and_query(self) -> None:
         self.assertEqual(

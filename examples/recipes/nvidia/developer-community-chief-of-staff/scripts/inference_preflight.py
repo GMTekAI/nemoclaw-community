@@ -96,6 +96,28 @@ def classify_http_error(error: urllib.error.HTTPError) -> PreflightError:
     )
 
 
+def validate_completion_response(response_body: bytes) -> None:
+    try:
+        payload = json.loads(response_body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise PreflightError(
+            "provider-response",
+            "provider returned a non-JSON success response",
+            6,
+        ) from None
+
+    if (
+        not isinstance(payload, dict)
+        or not isinstance(payload.get("choices"), list)
+        or not payload["choices"]
+    ):
+        raise PreflightError(
+            "provider-response",
+            "provider response did not include a completion choice",
+            6,
+        )
+
+
 def run_preflight(endpoint: str, model: str, key: str, timeout: float) -> None:
     if not key:
         raise PreflightError("configuration", "inference credential is missing", 2)
@@ -130,7 +152,7 @@ def run_preflight(endpoint: str, model: str, key: str, timeout: float) -> None:
                     f"unexpected HTTP status {response.status}",
                     6,
                 )
-            response.read(16384)
+            validate_completion_response(response.read(16384))
     except urllib.error.HTTPError as error:
         raise classify_http_error(error) from None
     except (TimeoutError, socket.timeout):
