@@ -23,9 +23,8 @@ Use one of these methods to contribute:
 
 For a problem report, identify the example. Give the environment details.
 
-Select an example from the
-[reference examples](README.md#reference-examples). Read the example's README.
-Follow all linked setup and check instructions.
+Select an example from the [example catalog](examples/README.md). Read the
+example's README. Follow all linked setup and check instructions.
 
 Discuss each of these changes with maintainers before implementation:
 
@@ -175,6 +174,10 @@ In the pull request description, include this check information:
 Before you report that a check passed, run it after the last change that can
 affect its result.
 
+When adding, moving, or renaming an example, follow the
+[example taxonomy and naming policy](.agents/skills/nemoclaw-community-contributor-examples/references/example-taxonomy.md)
+and its linked restructure checklist.
+
 ## Add a New Example
 
 Before implementation, discuss the example's location, name, and provenance
@@ -196,8 +199,7 @@ Document this information for a new example:
 - Its known limitations.
 - Its third-party dependencies and license obligations.
 
-Add the example to the
-[reference examples](README.md#reference-examples).
+Add the example to the [example catalog](examples/README.md).
 
 ## Move or Rename an Example
 
