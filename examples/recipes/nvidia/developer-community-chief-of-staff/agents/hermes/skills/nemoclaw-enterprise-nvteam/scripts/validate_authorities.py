@@ -10,7 +10,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +25,24 @@ IDENTITY_FIELDS = (
 )
 SCOPE_FIELDS = ("products", "topics", "claim_types")
 STABLE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+ISO_DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+
+
+class DuplicateKeyError(ValueError):
+    """Report a repeated key while decoding a JSON object."""
+
+    def __init__(self, key: str) -> None:
+        super().__init__(key)
+        self.key = key
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise DuplicateKeyError(key)
+        result[key] = value
+    return result
 
 
 def _unknown_keys(
@@ -75,13 +93,13 @@ def _string_set(value: Any, path: str, errors: list[str]) -> list[str] | None:
 
 
 def _parse_date(value: Any, path: str, errors: list[str]) -> date | None:
-    if not isinstance(value, str):
-        errors.append(f"{path}: expected an ISO date")
+    if not isinstance(value, str) or ISO_DATE.fullmatch(value) is None:
+        errors.append(f"{path}: expected a date in exact YYYY-MM-DD form")
         return None
     try:
         return date.fromisoformat(value)
     except ValueError:
-        errors.append(f"{path}: expected an ISO date in YYYY-MM-DD form")
+        errors.append(f"{path}: expected a valid calendar date in YYYY-MM-DD form")
         return None
 
 
@@ -123,11 +141,20 @@ def _validate_people(
         verified = None
         if "verified_on" in person:
             verified = _parse_date(person["verified_on"], f"{id_path}.verified_on", errors)
+            if verified is not None and verified > today:
+                errors.append(
+                    f"{id_path}.verified_on: date must not be later than "
+                    f"{today.isoformat()}"
+                )
 
         review_days = person.get("review_after_days")
         if isinstance(review_days, bool) or not isinstance(review_days, int) or review_days < 1:
             errors.append(f"{id_path}.review_after_days: expected an integer greater than zero")
-        elif verified is not None and today > verified + timedelta(days=review_days):
+        elif (
+            verified is not None
+            and verified <= today
+            and (today - verified).days > review_days
+        ):
             warnings.append(
                 f"{id_path}: stale metadata; verified_on={verified.isoformat()} "
                 f"review_after_days={review_days}"
@@ -188,12 +215,13 @@ def _validate_assignments(
             errors.append(f"{id_path}.person_id: unknown person reference {person_id!r}")
 
         persona = assignment.get("persona")
-        if persona not in PERSONAS:
+        if not isinstance(persona, str) or persona not in PERSONAS:
             errors.append(
                 f"{id_path}.persona: expected one of {', '.join(sorted(PERSONAS))}"
             )
 
-        if assignment.get("level") not in {"primary", "supporting"}:
+        level = assignment.get("level")
+        if not isinstance(level, str) or level not in {"primary", "supporting"}:
             errors.append(f"{id_path}.level: expected 'primary' or 'supporting'")
         if not isinstance(assignment.get("enabled"), bool):
             errors.append(f"{id_path}.enabled: expected a boolean")
@@ -227,8 +255,13 @@ def validate_registry(data: Any, today: date) -> tuple[list[str], list[str]]:
 
     if "$schema" in data:
         _nonempty_string(data["$schema"], "$.$schema", errors)
-    if data.get("schema_version") != 1:
-        errors.append("$.schema_version: expected 1")
+    schema_version = data.get("schema_version")
+    if (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version != 1
+    ):
+        errors.append("$.schema_version: expected the integer 1")
     if data.get("registry_kind") != "base":
         errors.append("$.registry_kind: expected 'base'")
 
@@ -237,12 +270,23 @@ def validate_registry(data: Any, today: date) -> tuple[list[str], list[str]]:
     return errors, warnings
 
 
+def _argument_date(value: str) -> date:
+    if ISO_DATE.fullmatch(value) is None:
+        raise argparse.ArgumentTypeError("expected a date in exact YYYY-MM-DD form")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "expected a valid calendar date in YYYY-MM-DD form"
+        ) from exc
+
+
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("registry", type=Path, help="Path to persona-authorities.json")
     parser.add_argument(
         "--today",
-        type=date.fromisoformat,
+        type=_argument_date,
         default=date.today(),
         metavar="YYYY-MM-DD",
         help="Date used for deterministic freshness checks",
@@ -262,11 +306,18 @@ def main() -> int:
     warnings: list[str] = []
 
     try:
-        data = json.loads(args.registry.read_text(encoding="utf-8"))
+        data = json.loads(
+            args.registry.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+        )
     except OSError as exc:
         errors.append(f"$: unable to read registry: {exc}")
+    except DuplicateKeyError as exc:
+        errors.append(f"$: duplicate JSON object key {exc.key!r}")
     except json.JSONDecodeError as exc:
         errors.append(f"$: invalid JSON at line {exc.lineno}, column {exc.colno}: {exc.msg}")
+    except ValueError as exc:
+        errors.append(f"$: invalid JSON value: {exc}")
     else:
         errors, warnings = validate_registry(data, args.today)
 

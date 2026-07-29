@@ -4,7 +4,8 @@
 #
 # Capture the agent's writable state (/sandbox/.hermes-data — memories, sessions,
 # skills, plugins, etc.) to a host-side tarball that survives sandbox deletion.
-# A conservative name-based filter excludes obvious credential files before tar.
+# A conservative path/name filter excludes credentials and private NVTeam
+# authority registries before tar.
 # Output: $EXAMPLE_DIR/.snapshots/{ts}.tar.gz + .manifest.json. Tarball path is
 # echoed on stdout so callers can capture it: SNAP=$(bash scripts/snapshot.sh)
 

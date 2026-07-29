@@ -188,11 +188,17 @@ Skills are loaded on demand by the agent when relevant to a task. They live in [
 | `nemoclaw-autoheal` | Guide users through sandbox health checks and optional host-side auto-heal setup. |
 | `nemoclaw-enterprise-nvteam` | Route product, delivery, engineering, quality, operations, security, and developer-relations work through seven evidence-bounded role lenses. |
 
-The NVTeam package was validated from source revision
-`b87038405fd7d9646dba57c367f54d86ca4d933d` with relative-file tree SHA-256
-`c56197cd06e929233c6de92a89c4cccae4682ff587888b4b71f3788297fdd6d1`.
-Its authority behavior is disabled unless a separately provisioned registry is
-present and valid; this example includes only the synthetic schema and example.
+The original contribution reported source revision
+`b87038405fd7d9646dba57c367f54d86ca4d933d`. This repository adapts and hardens
+that package for the public recipe; it does not claim byte-for-byte identity
+with the reported source. The repository commit that contains this example is
+the auditable version.
+
+Named-person authority weighting is disabled by default. This public recipe
+does not provision a private registry or a secure registry-installation
+workflow. It includes only the schema, synthetic example, and validator for a
+trusted runtime that supplies the registry read-only outside agent-writable
+state.
 
 The seven role lenses are the PM person (River), TPM person (Quinn), backend
 and systems engineering person (Akira), QA person (Robin), SRE person (Alex),
@@ -629,7 +635,15 @@ $ openshell sandbox connect hermes-direct
 To pin a specific snapshot instead of the latest, pass the path:
 `bash scripts/restore.sh .snapshots/2026-05-07T19-03-22Z.tar.gz`.
 
-[scripts/snapshot.sh](scripts/snapshot.sh) excludes obvious credential-bearing files (`.env`, `*secret*`, `*token*`, `auth-profiles*`, etc.) so the tarballs are safe to share — same spirit as NemoClaw's upstream `createSnapshotBundle()` redaction, with file-level exclusion in place of content-aware redaction.
+[scripts/snapshot.sh](scripts/snapshot.sh) excludes obvious
+credential-bearing filenames (`.env`, `*secret*`, `*token*`,
+`auth-profiles*`, etc.), the legacy writable `nvteam/` registry location, and
+recognizable copies of `persona-authorities` files. The filter is name-based,
+not content-aware. A snapshot can still contain sensitive conversation,
+session, memory, or learned-skill content. Treat every snapshot as sensitive;
+inspect and independently sanitize it before sharing.
+[scripts/restore.sh](scripts/restore.sh) also rejects an archive that contains
+a recognizable private authority registry path.
 
 The `.snapshots/` directory is `.gitignore`'d.
 

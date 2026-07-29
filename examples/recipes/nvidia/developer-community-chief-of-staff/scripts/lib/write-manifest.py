@@ -6,7 +6,7 @@
 Sidecar to snapshot.sh and download-traces.sh. Same on-disk schema either way:
 {version, captured_at, sandbox_name, source_path, tarball, tarball_bytes,
  file_count, excluded_files, note}. When file_count == 0 and --empty-note is
-non-empty, that note is used instead of the default credential-filter note.
+non-empty, that note is used instead of the default sensitive-file-filter note.
 """
 from __future__ import annotations
 
@@ -33,7 +33,10 @@ def main() -> None:
     if args.file_count == 0 and args.empty_note:
         note = args.empty_note
     else:
-        note = "File-level credential filter applied. Inspect with `tar tzf <path>`."
+        note = (
+            "File-level sensitive-data filter applied (credentials and private "
+            "authority registries). Inspect with `tar tzf <path>`."
+        )
 
     manifest = {
         "version": 1,

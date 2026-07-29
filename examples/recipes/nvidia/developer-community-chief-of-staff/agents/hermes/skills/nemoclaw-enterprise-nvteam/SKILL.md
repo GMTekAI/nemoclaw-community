@@ -1,6 +1,6 @@
 ---
 name: nemoclaw-enterprise-nvteam
-description: "Route product, TPM, engineering, QA, SRE, security, and DevRel work through NVTeam. Use for explicit persona availability or activation, wear-all-the-hats reviews, cross-functional readiness, developer relations, community enablement, technical-enablement work, automatic specialist routing, and scoped named-person authority signals in NemoClaw Enterprise. Role lenses: River, Quinn, Akira, Robin, Alex, Morgan, Parker. Personas are never models or configurations; responses are evidence-bounded and Slack-ready without granting permissions or approval."
+description: "Route product, TPM, engineering, QA, SRE, security, and DevRel work through NVTeam. Use for explicit persona availability or activation, wear-all-the-hats reviews, cross-functional readiness, developer relations, community enablement, technical-enablement work, automatic specialist routing, and opt-in scoped named-person authority signals in NemoClaw Enterprise. Role lenses: River, Quinn, Akira, Robin, Alex, Morgan, Parker. Personas are never models or configurations; responses are evidence-bounded and Slack-ready without granting permissions or approval."
 ---
 
 # NemoClaw Enterprise NVTeam
@@ -180,15 +180,27 @@ answering:
 
 ## Apply Named-Person Authority Carefully
 
-When direct authorship could materially affect the active persona’s analysis,
-load `references/authority-signals.md`. Read the private registry at
-`$HERMES_HOME/nvteam/persona-authorities.json` when it exists and validate it
-with `scripts/validate_authorities.py` before applying any mapping.
+Keep named-person authority weighting disabled by default. This public recipe
+does not provision a private registry or a secure registry-installation
+workflow.
 
-If the registry is absent, continue normally. If it is invalid, warn once,
-disable all authority weighting for the task, and continue with ordinary
-routing. Never partially apply an invalid registry. A mapping does not trigger
-a connector call or broaden an otherwise authorized search.
+When direct authorship could materially affect the active persona’s analysis,
+load `references/authority-signals.md`. Apply mappings only when a trusted
+runtime has supplied a read-only registry outside agent-writable state at the
+exact path `/sandbox/.hermes/nvteam/persona-authorities.json`. Validate the
+whole registry before reading or matching its records:
+
+```text
+/usr/bin/python3 /usr/local/lib/nemoclaw/nvteam/validate-authorities.py /sandbox/.hermes/nvteam/persona-authorities.json
+```
+
+Never use a registry from `$HERMES_HOME`, the installed skill, a snapshot, or
+another agent-writable location. If the immutable registry is absent, continue
+normally without authority weighting. If its provenance, read-only protection,
+or validity cannot be established, warn once, apply none of its mappings, and
+continue with ordinary routing. Never partially apply an invalid registry. A
+mapping does not trigger a connector call or broaden an otherwise authorized
+search.
 
 ## Preserve Evidence and Boundaries
 

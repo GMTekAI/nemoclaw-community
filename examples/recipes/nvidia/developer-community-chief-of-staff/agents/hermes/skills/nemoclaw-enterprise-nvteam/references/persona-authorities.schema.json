@@ -31,6 +31,7 @@
     },
     "assignments": {
       "type": "object",
+      "description": "Persona-scoped authority assignments. Only assignments with enabled set to true can affect authority weighting.",
       "propertyNames": {
         "$ref": "#/$defs/stableId"
       },
@@ -106,7 +107,8 @@
         },
         "verified_on": {
           "type": "string",
-          "format": "date"
+          "format": "date",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
         },
         "review_after_days": {
           "type": "integer",
@@ -173,7 +175,8 @@
           ]
         },
         "enabled": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "When false, exclude this assignment from authority weighting, identity priority, routing, and search behavior."
         },
         "scope": {
           "$ref": "#/$defs/scope"

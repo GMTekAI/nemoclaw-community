@@ -265,6 +265,14 @@ RUN chmod -R a+rX /opt/nemoclaw-hermes-plugin/ \
 COPY scripts/lib/sandbox-init.sh /usr/local/lib/nemoclaw/sandbox-init.sh
 RUN chmod 644 /usr/local/lib/nemoclaw/sandbox-init.sh
 
+# Install the NVTeam authority-registry validator outside agent-writable state.
+# The public recipe does not provision a private registry. A trusted runtime
+# may supply one separately at /sandbox/.hermes/nvteam/persona-authorities.json,
+# which remains outside snapshots of /sandbox/.hermes-data.
+COPY agents/hermes/skills/nemoclaw-enterprise-nvteam/scripts/validate_authorities.py \
+     /usr/local/lib/nemoclaw/nvteam/validate-authorities.py
+RUN chmod 555 /usr/local/lib/nemoclaw/nvteam/validate-authorities.py
+
 # Copy startup script
 COPY agents/hermes/start.sh /usr/local/bin/nemoclaw-start
 RUN chmod 755 /usr/local/bin/nemoclaw-start
@@ -337,10 +345,12 @@ RUN ln -s /sandbox/.hermes-data/SOUL.md /sandbox/.hermes/SOUL.md
 # Same pattern as OpenClaw — Landlock provides defense-in-depth.
 # hadolint ignore=DL3002
 USER root
-RUN chown root:root /sandbox/.hermes \
+RUN mkdir -p /sandbox/.hermes/nvteam \
+    && chown root:root /sandbox/.hermes \
     && rm -rf /root/.cache/pip /sandbox/.cache \
-    && find /sandbox/.hermes -mindepth 1 -maxdepth 1 -exec chown -h root:root {} + \
+    && find /sandbox/.hermes -mindepth 1 -exec chown -h root:root {} + \
     && chmod 755 /sandbox/.hermes \
+    && chmod 555 /sandbox/.hermes/nvteam \
     && chmod 444 /sandbox/.hermes/config.yaml \
     && chmod 444 /sandbox/.hermes/.env
 
