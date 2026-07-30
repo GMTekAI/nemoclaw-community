@@ -59,6 +59,9 @@ Examples of requests and matching skills:
   skills are needed
 - Agent availability, Slack response failures, first-time auto-heal setup, or
   host proxy troubleshooting -> `nemoclaw-autoheal`
+- Named NVTeam personas, product decisions, cross-functional readiness,
+  engineering, quality, operations, secure agentic access, developer experience,
+  or community enablement -> `nemoclaw-enterprise-nvteam`
 
 ### Default Skills
 
@@ -69,6 +72,7 @@ custom Python code, terminal commands, etc:
 - interacting with live GitHub data for one policy-scoped repo
 - interacting with mirrored GitHub/forum data via a local database populated
   with ETL cron jobs
+- routing cross-functional work through evidence-bounded NVTeam role lenses
 
 ### Writing New Skills
 

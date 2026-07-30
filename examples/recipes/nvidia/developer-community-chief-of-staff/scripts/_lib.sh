@@ -234,12 +234,67 @@ resolve_download_root() {
   fi
 }
 
-# Walk $1 deleting files whose names match a conservative credential-shape
-# allowlist. Populates the global EXCLUDED_FILES array with relative paths
-# (relative to $1) and prints them to stderr. Used by snapshot.sh and
-# download-traces.sh before tar-ing up their respective payloads.
+# Return success when a snapshot-relative path belongs to the private NVTeam
+# authority registry. The live registry is reserved to the operator-controlled
+# `/sandbox/.hermes/nvteam/` directory, outside the snapshot root. Treat any
+# legacy `nvteam/` snapshot subtree and recognizable copies/backups as private.
+# This also excludes the bundled schema and synthetic example because their
+# agent-writable copies could have been replaced; a fresh sandbox already
+# contains clean baked copies.
+is_private_authority_registry_path() {
+  local path="$1" folded basename_
+  while [[ "$path" == ./* ]]; do path="${path#./}"; done
+  path="${path#/}"
+  folded="$(printf '%s' "$path" | tr '[:upper:]' '[:lower:]')"
+  basename_="${folded##*/}"
+
+  case "$folded" in
+    nvteam|nvteam/*|*/nvteam|*/nvteam/*)
+      return 0
+      ;;
+  esac
+
+  case "$basename_" in
+    *persona-authorit*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+# Fail closed before restoring an old or externally supplied snapshot that
+# contains a private NVTeam authority registry. New snapshots filter these
+# paths, but restore must independently enforce the boundary.
+assert_snapshot_safe_to_restore() {
+  local archive="$1" entry
+  local unsafe_entries=()
+
+  if ! tar tzf "$archive" >/dev/null 2>&1; then
+    echo "Snapshot is not a readable gzip tar archive: $archive" >&2
+    return 1
+  fi
+
+  while IFS= read -r entry; do
+    [[ "$entry" == */ ]] && continue
+    if is_private_authority_registry_path "$entry"; then
+      unsafe_entries+=("$entry")
+    fi
+  done < <(tar tzf "$archive")
+
+  if (( ${#unsafe_entries[@]} > 0 )); then
+    echo "Refusing to restore a snapshot containing private NVTeam authority-registry path(s):" >&2
+    printf '  %s\n' "${unsafe_entries[@]}" >&2
+    echo "Provision authority data outside writable HERMES_HOME; it is never snapshot-restorable." >&2
+    return 1
+  fi
+}
+
+# Walk $1 deleting files whose paths match conservative credential or private
+# authority-registry shapes. Populates the global EXCLUDED_FILES array with
+# relative paths (relative to $1) and prints them to stderr. Used by
+# snapshot.sh and download-traces.sh before tar-ing their payloads.
 filter_credential_files() {
-  local root="$1"
+  local root="$1" f relative
   EXCLUDED_FILES=()
   while IFS= read -r -d '' f; do
     EXCLUDED_FILES+=("${f#"$root/"}")
@@ -250,8 +305,17 @@ filter_credential_files() {
       -iname 'auth-profiles*' -o -iname 'credentials*' -o \
       -iname 'id_rsa*' -o -iname '*.pem' -o -iname '*.key' \
     \) -print0)
+
+  while IFS= read -r -d '' f; do
+    relative="${f#"$root/"}"
+    if is_private_authority_registry_path "$relative"; then
+      EXCLUDED_FILES+=("$relative")
+      rm -f "$f"
+    fi
+  done < <(find "$root" -type f -print0)
+
   if (( ${#EXCLUDED_FILES[@]} > 0 )); then
-    echo "Excluded ${#EXCLUDED_FILES[@]} credential-shaped file(s):" >&2
+    echo "Excluded ${#EXCLUDED_FILES[@]} sensitive file(s):" >&2
     printf '  %s\n' "${EXCLUDED_FILES[@]}" >&2
   fi
 }
@@ -259,8 +323,8 @@ filter_credential_files() {
 # Write the companion manifest JSON for a tarball produced by snapshot.sh or
 # download-traces.sh. Trailing positional args are the excluded file list
 # (relative paths from the source root); leave empty if filter_credential_files
-# excluded nothing. `--empty-note "<text>"` overrides the default "filter
-# applied" note for the case where the source dir was empty (atif).
+# excluded nothing. `--empty-note "<text>"` overrides the default
+# "sensitive-file filter applied" note when the source dir was empty (atif).
 write_snapshot_manifest() {
   local tarball="$1" manifest="$2" ts="$3" sandbox="$4" source_path="$5" empty_note="$6"
   shift 6

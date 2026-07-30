@@ -24,6 +24,11 @@ if [[ -z "$SNAP_PATH" || ! -f "$SNAP_PATH" ]]; then
   exit 1
 fi
 
+# Defense in depth: old or externally supplied archives may predate the
+# snapshot-side filter. Never reintroduce a private authority registry into
+# writable Hermes state.
+assert_snapshot_safe_to_restore "$SNAP_PATH"
+
 assert_sandbox_ready
 
 echo "Restoring from $SNAP_PATH"
