@@ -88,7 +88,7 @@ To sign in, use a web browser to open the page https://microsoft.com/devicelogin
 and enter the code ABCD1234 to authenticate.
 ```
 
-Open that URL in a browser, sign in **as the agent account** (`OUTLOOK_TARGET_MAILBOX`), and enter the code. The script captures the refresh token and registers it with the gateway via `openshell provider refresh configure`. The token is cached at `.bootstrap/cache/ms-graph-token.json` (mode 0600; ignored by `.gitignore`) so subsequent bring-ups reuse it. Set `OUTLOOK_LOGIN_CACHE=0` to skip the on-disk cache entirely — see the security note below.
+Open that URL in a browser, sign in **as the agent account** (`OUTLOOK_TARGET_MAILBOX`), and enter the code. The script captures the refresh token and registers it with the gateway via `openshell provider refresh configure`. The token is cached at `.bootstrap/cache/ms-graph-token.json` (mode 0600; ignored by `.gitignore`) so subsequent bring-ups reuse it. Cache freshness is based on the refresh-token horizon, not the one-hour access-token expiry; the gateway rotates access tokens independently. Microsoft supplies the refresh lifetime when available, otherwise setup uses a conservative 90-day horizon. Legacy caches use their modification time for the same compatibility window. If gateway rotation rejects a still-fresh cached token, setup requests device-code login and replaces the cache. Set `OUTLOOK_LOGIN_CACHE=0` to skip the on-disk cache entirely — see the security note below.
 
 After this, the gateway auto-rotates the access token in the background. The sandbox bridge and skills call `https://graph.microsoft.com` directly with the placeholder header; the L7 proxy substitutes a live token on egress.
 

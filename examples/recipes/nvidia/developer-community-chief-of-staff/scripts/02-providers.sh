@@ -114,21 +114,39 @@ if [[ -n "${OUTLOOK_CLIENT_ID:-}" ]]; then
 
   login_json=""
   mode="${OUTLOOK_LOGIN_CACHE:-1}"
+  reused_outlook_cache=false
 
-  # Mode 1: try the cache, with a freshness check on expires_at_ms.
+  outlook_device_login() {
+    local login_hint_args=()
+    [[ -n "${OUTLOOK_TARGET_MAILBOX:-}" ]] && login_hint_args+=(--login-hint "$OUTLOOK_TARGET_MAILBOX")
+    python3 "$DIR/login-ms-graph.py" \
+      --tenant-id "$OUTLOOK_TENANT_ID" \
+      --client-id "$OUTLOOK_CLIENT_ID" \
+      "${login_hint_args[@]}"
+  }
+
+  write_outlook_login_cache() {
+    local payload="$1"
+    mkdir -p "$(dirname "$OUTLOOK_LOGIN_CACHE_PATH")"
+    umask 077
+    printf '%s\n' "$payload" > "$OUTLOOK_LOGIN_CACHE_PATH"
+    chmod 600 "$OUTLOOK_LOGIN_CACHE_PATH"
+  }
+
+  # Mode 1: try the cache, with a freshness check on the refresh-token
+  # horizon. expires_at_ms is the one-hour access-token expiry used by the
+  # gateway and must not decide whether device login is required.
   if [[ "$mode" == "1" && -f "$OUTLOOK_LOGIN_CACHE_PATH" ]]; then
-    cached_expires_at_ms="$(python3 -c '
-import json, sys
-try:
-    print(json.load(open(sys.argv[1]))["expires_at_ms"])
-except Exception:
-    print(0)
-' "$OUTLOOK_LOGIN_CACHE_PATH" 2>/dev/null || echo 0)"
+    cached_expires_at_ms="$(
+      python3 "$DIR/lib/outlook_cache.py" "$OUTLOOK_LOGIN_CACHE_PATH" \
+        2>/dev/null || echo 0
+    )"
     now_ms=$(( $(date +%s) * 1000 ))
     if [[ "$cached_expires_at_ms" -gt "$now_ms" ]]; then
       days_left=$(( (cached_expires_at_ms - now_ms) / 1000 / 86400 ))
       echo "Reusing cached Microsoft refresh token at $OUTLOOK_LOGIN_CACHE_PATH (${days_left}d until expiry)"
       login_json="$(cat "$OUTLOOK_LOGIN_CACHE_PATH")"
+      reused_outlook_cache=true
     else
       echo "Cached refresh token at $OUTLOOK_LOGIN_CACHE_PATH is expired or unreadable; re-running device-code login"
     fi
@@ -140,22 +158,12 @@ except Exception:
       0) echo "OUTLOOK_LOGIN_CACHE=0 — device-code login, no on-disk cache" ;;
       2) echo "OUTLOOK_LOGIN_CACHE=2 — forcing device-code login + cache rewrite" ;;
     esac
-    login_hint_args=()
-    [[ -n "${OUTLOOK_TARGET_MAILBOX:-}" ]] && login_hint_args+=(--login-hint "$OUTLOOK_TARGET_MAILBOX")
-    login_json="$(python3 "$DIR/login-ms-graph.py" \
-      --tenant-id "$OUTLOOK_TENANT_ID" \
-      --client-id "$OUTLOOK_CLIENT_ID" \
-      "${login_hint_args[@]}")"
+    login_json="$(outlook_device_login)"
     # Modes 1 and 2 write the cache; mode 0 doesn't.
     if [[ "$mode" != "0" ]]; then
-      mkdir -p "$(dirname "$OUTLOOK_LOGIN_CACHE_PATH")"
-      umask 077
-      printf '%s\n' "$login_json" > "$OUTLOOK_LOGIN_CACHE_PATH"
+      write_outlook_login_cache "$login_json"
     fi
   fi
-
-  refresh_token="$(printf '%s' "$login_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')"
-  expires_at_ms="$(printf '%s' "$login_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["expires_at_ms"])')"
 
   echo "Upserting provider $OUTLOOK_PROVIDER (OAuth refresh-token strategy)"
   if ! openshell provider get "$OUTLOOK_PROVIDER" >/dev/null 2>&1; then
@@ -163,16 +171,32 @@ except Exception:
       --credential "MS_GRAPH_ACCESS_TOKEN=bootstrap-placeholder"
   fi
 
-  openshell provider refresh configure "$OUTLOOK_PROVIDER" \
-    --credential-key MS_GRAPH_ACCESS_TOKEN \
-    --strategy oauth2-refresh-token \
-    --material "tenant_id=$OUTLOOK_TENANT_ID" \
-    --material "client_id=$OUTLOOK_CLIENT_ID" \
-    --material "refresh_token=$refresh_token" \
-    --secret-material-key refresh_token \
-    --credential-expires-at "$expires_at_ms"
+  configure_outlook_refresh() {
+    local payload="$1" refresh_token expires_at_ms
+    refresh_token="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys.stdin)["refresh_token"])')"
+    expires_at_ms="$(printf '%s' "$payload" | python3 -c 'import json,sys; print(json.load(sys.stdin)["expires_at_ms"])')"
+    openshell provider refresh configure "$OUTLOOK_PROVIDER" \
+      --credential-key MS_GRAPH_ACCESS_TOKEN \
+      --strategy oauth2-refresh-token \
+      --material "tenant_id=$OUTLOOK_TENANT_ID" \
+      --material "client_id=$OUTLOOK_CLIENT_ID" \
+      --material "refresh_token=$refresh_token" \
+      --secret-material-key refresh_token \
+      --credential-expires-at "$expires_at_ms"
+  }
 
-  openshell provider refresh rotate "$OUTLOOK_PROVIDER" --credential-key MS_GRAPH_ACCESS_TOKEN
+  configure_outlook_refresh "$login_json"
+  if ! openshell provider refresh rotate "$OUTLOOK_PROVIDER" --credential-key MS_GRAPH_ACCESS_TOKEN; then
+    if ! "$reused_outlook_cache"; then
+      echo "Microsoft refresh-token rotation failed after device-code login" >&2
+      exit 1
+    fi
+    echo "Cached Microsoft refresh token was rejected; re-running device-code login"
+    login_json="$(outlook_device_login)"
+    write_outlook_login_cache "$login_json"
+    configure_outlook_refresh "$login_json"
+    openshell provider refresh rotate "$OUTLOOK_PROVIDER" --credential-key MS_GRAPH_ACCESS_TOKEN
+  fi
 fi
 
 # ── Slack provider (bot token + app token in one v2 provider) ──────────
