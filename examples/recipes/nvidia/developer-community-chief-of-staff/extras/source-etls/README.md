@@ -43,6 +43,7 @@ Export the repo root `.env` before running compose. Relevant variables:
 - `SOURCE_ETL_POSTGRES_READER_PASSWORD`
 - `SOURCE_ETL_API_PORT`
 - `GITHUB_TOKEN`
+- `NEMOCLAW_HOST_CA_BUNDLE`
 
 ## Run
 
