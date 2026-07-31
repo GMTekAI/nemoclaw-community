@@ -105,18 +105,25 @@ SLACK_BOT_TOKEN=xoxb-<your bot token from OAuth & Permissions>
 SLACK_APP_TOKEN=xapp-<your app-level token from Socket Mode>
 # Optional — leave empty to allow anyone in the workspace
 SLACK_ALLOWED_IDS=U0887Q5UVV4
-# Optional — native Block Kit rendering for supported Markdown tables
-NEMOCLAW_SLACK_RICH_BLOCKS=false
+# Optional — set false for text-only output
+NEMOCLAW_SLACK_RICH_BLOCKS=true
 ```
 
 Leaving `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` unset disables Slack entirely — the example runs Outlook-only. If you set the tokens, a single `<sandbox>-slack` provider is upserted by [scripts/02-providers.sh](../scripts/02-providers.sh) with both credentials attached.
 
-Set `NEMOCLAW_SLACK_RICH_BLOCKS=true` to have Hermes render supported Markdown
-with Slack Block Kit, including native table blocks. The setting accepts only
-`true` or `false` and defaults to `false`, preserving the existing plain-text
-behavior. It uses the existing Slack credentials and does not require additional
-OAuth scopes or reinstalling the Slack app. Rebuild the sandbox after changing
-the setting.
+Hermes renders supported semantic Markdown with Slack Block Kit by default,
+including native table blocks. Set `NEMOCLAW_SLACK_RICH_BLOCKS=false` for
+text-only output. The setting accepts only `true` or `false`. Every message
+keeps a text fallback for notifications, accessibility, old clients, and
+renderer failure.
+
+The recipe also renders two to four Hermes clarification choices as one-tap
+buttons plus an `Other` option. The pinned Hermes base already provides the
+clarification and authorization primitives; a feature-detected compatibility
+shim adds the missing Slack presentation. It stands down when a future Hermes
+base supplies native Slack clarification buttons. Rich Blocks and buttons use
+the existing Slack credentials and require no additional OAuth scopes or app
+reinstall. Rebuild the sandbox after changing the Rich Blocks setting.
 
 ## Run `bring-up.sh`
 

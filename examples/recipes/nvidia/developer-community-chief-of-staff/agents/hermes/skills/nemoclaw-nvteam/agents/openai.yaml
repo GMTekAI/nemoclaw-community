@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+interface:
+  display_name: "NemoClaw NVTeam"
+  short_description: "Eight-role product, delivery, engineering, and community team"
+  default_prompt: "Use $nemoclaw-nvteam to route this work to the right specialist and return an evidence-bounded recommendation."
