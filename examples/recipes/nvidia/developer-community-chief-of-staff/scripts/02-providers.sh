@@ -75,7 +75,26 @@ if [[ -n "$INFERENCE_KEY" ]]; then
   INFERENCE_PROVIDER="compatible-endpoint"
   INFERENCE_MODEL="${NEMOCLAW_MODEL:-nvidia/nemotron-3-super-120b-a12b}"
   INFERENCE_BASE_URL="${NEMOCLAW_ENDPOINT_URL:-${OPENAI_BASE_URL:-https://integrate.api.nvidia.com/v1}}"
+  INFERENCE_PREFLIGHT="${NEMOCLAW_INFERENCE_PREFLIGHT:-1}"
+  INFERENCE_PREFLIGHT_TIMEOUT="${NEMOCLAW_INFERENCE_PREFLIGHT_TIMEOUT:-10}"
   echo "Upserting inference provider $INFERENCE_PROVIDER (model: $INFERENCE_MODEL, base: $INFERENCE_BASE_URL)"
+
+  case "$INFERENCE_PREFLIGHT" in
+    0)
+      echo "WARNING: structured tool-call and active-route preflight bypassed (NEMOCLAW_INFERENCE_PREFLIGHT=0)" >&2
+      ;;
+    1)
+      NEMOCLAW_INFERENCE_PREFLIGHT_KEY="$INFERENCE_KEY" \
+        python3 "$DIR/inference_tool_preflight.py" tool-call \
+          --endpoint "$INFERENCE_BASE_URL" \
+          --model "$INFERENCE_MODEL" \
+          --timeout "$INFERENCE_PREFLIGHT_TIMEOUT"
+      ;;
+    *)
+      echo "Invalid NEMOCLAW_INFERENCE_PREFLIGHT=$INFERENCE_PREFLIGHT (expected 0 or 1)" >&2
+      exit 1
+      ;;
+  esac
 
   # Recreate if existing provider has the wrong type (e.g. left over from the
   # nemoclaw-compatible-endpoint direct-egress experiment).
@@ -99,6 +118,15 @@ if [[ -n "$INFERENCE_KEY" ]]; then
 
   echo "Setting cluster inference: provider=$INFERENCE_PROVIDER model=$INFERENCE_MODEL"
   openshell inference set --no-verify --provider "$INFERENCE_PROVIDER" --model "$INFERENCE_MODEL"
+  if [[ "$INFERENCE_PREFLIGHT" == "1" ]]; then
+    if ! active_route="$(openshell inference get 2>/dev/null)"; then
+      echo "Inference preflight failed (active-route): openshell inference get failed" >&2
+      exit 2
+    fi
+    printf '%s\n' "$active_route" | python3 "$DIR/inference_tool_preflight.py" active-route \
+      --provider "$INFERENCE_PROVIDER" \
+      --model "$INFERENCE_MODEL"
+  fi
 else
   echo "WARNING: neither OPENAI_API_KEY nor COMPATIBLE_API_KEY is set — skipping inference provider. The agent will have no LLM." >&2
 fi
