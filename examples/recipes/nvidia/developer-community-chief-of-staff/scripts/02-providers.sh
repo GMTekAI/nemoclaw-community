@@ -69,6 +69,23 @@ for profile_file in outlook-email.yaml slack.yaml github.yaml atif-export-relay.
   fi
 done
 
+# Keep preflight subprocesses isolated from unrelated host state while
+# preserving the standard proxy and CA settings needed on enterprise networks.
+PREFLIGHT_NETWORK_ENV=(
+  "HOME=$HOME"
+  "PATH=$PATH"
+  "HTTP_PROXY=${HTTP_PROXY:-}"
+  "HTTPS_PROXY=${HTTPS_PROXY:-}"
+  "ALL_PROXY=${ALL_PROXY:-}"
+  "NO_PROXY=${NO_PROXY:-}"
+  "http_proxy=${http_proxy:-}"
+  "https_proxy=${https_proxy:-}"
+  "all_proxy=${all_proxy:-}"
+  "no_proxy=${no_proxy:-}"
+  "SSL_CERT_FILE=${SSL_CERT_FILE:-}"
+  "SSL_CERT_DIR=${SSL_CERT_DIR:-}"
+)
+
 # ── Inference provider (built-in nvidia v2 profile via inference.local) ─
 INFERENCE_KEY="${OPENAI_API_KEY:-${COMPATIBLE_API_KEY:-}}"
 INFERENCE_PREFLIGHT="${NEMOCLAW_INFERENCE_PREFLIGHT:-1}"
@@ -108,7 +125,7 @@ if [[ -n "$INFERENCE_KEY" ]]; then
 
   if [[ "$INFERENCE_PREFLIGHT" == "1" ]]; then
     echo "Validating inference endpoint, credential, and model before sandbox creation"
-    env -i HOME="$HOME" PATH="$PATH" \
+    env -i "${PREFLIGHT_NETWORK_ENV[@]}" \
       NEMOCLAW_INFERENCE_PREFLIGHT_KEY="$INFERENCE_KEY" \
       python3 "$DIR/inference_preflight.py" \
         --endpoint "$INFERENCE_BASE_URL" \
@@ -205,7 +222,7 @@ fi
 if [[ -n "${SLACK_BOT_TOKEN:-}" || -n "${SLACK_APP_TOKEN:-}" ]]; then
   SLACK_PROVIDER="$SANDBOX_NAME-slack"
   echo "Validating Slack app token and Socket Mode scope before provider creation"
-  env -i HOME="$HOME" PATH="$PATH" \
+  env -i "${PREFLIGHT_NETWORK_ENV[@]}" \
     NEMOCLAW_SLACK_PREFLIGHT_TOKEN="${SLACK_APP_TOKEN:-}" \
     NEMOCLAW_SLACK_PREFLIGHT_TIMEOUT_SECONDS="${NEMOCLAW_SLACK_PREFLIGHT_TIMEOUT_SECONDS:-10}" \
     python3 "$DIR/slack_socket_preflight.py"

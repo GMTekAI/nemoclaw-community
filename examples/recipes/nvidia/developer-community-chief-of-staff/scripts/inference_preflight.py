@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import socket
@@ -30,15 +31,34 @@ class PreflightError(Exception):
         return f"Inference preflight failed ({self.category}): {self.detail}"
 
 
+def is_loopback_host(hostname: str | None) -> bool:
+    if not hostname:
+        return False
+    if hostname.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
 def completion_url(endpoint: str) -> str:
     parsed = urllib.parse.urlsplit(endpoint)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise PreflightError("endpoint", "endpoint must be an http(s) URL", 3)
+    if parsed.scheme == "http" and not is_loopback_host(parsed.hostname):
+        raise PreflightError(
+            "endpoint",
+            "remote inference endpoints must use HTTPS; HTTP is allowed only for loopback hosts",
+            3,
+        )
 
     path = parsed.path.rstrip("/")
     if not path.endswith("/chat/completions"):
         path = f"{path}/chat/completions"
-    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+    return urllib.parse.urlunsplit(
+        (parsed.scheme, parsed.netloc, path, parsed.query, "")
+    )
 
 
 def display_endpoint(endpoint: str) -> str:
