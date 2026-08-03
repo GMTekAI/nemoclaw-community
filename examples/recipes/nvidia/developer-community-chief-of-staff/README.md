@@ -310,8 +310,9 @@ Now edit `.env` and fill in everything you already have:
 [scripts/bring-up.sh](scripts/bring-up.sh) handles host services as its phase 1/4 by
 invoking [scripts/00-host-services.sh](scripts/00-host-services.sh) before the
 sandbox-side phases. The stack from [extras/docker-compose.yml](extras/docker-compose.yml)
-— phoenix (telemetry), postgres (ETL backing store), source ETL workers, PostgREST on
-host port 3100, plus minio + atif-export-relay when `ATIF_EXPORT_MODE=relay` — is
+— phoenix (telemetry), postgres (ETL backing store), the forum ETL, PostgREST on
+host port 3100, plus the opt-in GitHub ETL and minio + atif-export-relay when
+configured — is
 designed to outlive the sandbox, so subsequent `tear-down.sh && bring-up.sh` cycles
 re-touch only the sandbox by default (00-host-services is idempotent).
 
@@ -536,9 +537,10 @@ openshell sandbox exec --name "${SANDBOX_NAME:-hermes-direct}" -- sh -lc \
 ```
 
 `GITHUB_READONLY_REPO` controls only live REST reads through
-`github-readonly-live`. The host-side ETL mirror is independent; set
-`SOURCE_ETL_GITHUB_REPO=owner/repo` if you also want mirrored GitHub
-discussions/history from a different repo, then rerun
+`github-readonly-live`. The host-side ETL mirror is independent and disabled by
+default. Set `SOURCE_ETL_GITHUB_ENABLED=1` and optionally
+`SOURCE_ETL_GITHUB_REPO=owner/repo` when you want mirrored GitHub
+discussions/history, then rerun
 `bash scripts/00-host-services.sh`. Existing mirror database/state is preserved
 unless you remove the compose volumes.
 
@@ -557,6 +559,7 @@ unless you remove the compose volumes.
 | `COMPATIBLE_API_KEY` | (none) | Inference API key. Mirrors NemoClaw's `REMOTE_PROVIDER_CONFIG.custom`. (`OPENAI_API_KEY` is also accepted.) |
 | `GITHUB_TOKEN` | (none) | Optional GitHub token for authenticated live REST reads. Also feeds the optional host GitHub mirror. |
 | `GITHUB_READONLY_REPO` | `NVIDIA/OpenShell` | The only repo allowed by the live GitHub REST policy, formatted as `owner/repo`. Recreate the sandbox after changing it. |
+| `SOURCE_ETL_GITHUB_ENABLED` | `0` | Set to `1` to start the host-side GitHub mirror. A live-read `GITHUB_TOKEN` alone does not enable the ETL. |
 | `SOURCE_ETL_GITHUB_REPO` | `NVIDIA/NemoClaw` | Host-side GitHub mirror repo for source-etls. This is independent of `GITHUB_READONLY_REPO`. |
 | `OUTLOOK_LOGIN_CACHE` | `1` | Controls the Microsoft refresh-token cache at `.bootstrap/cache/ms-graph-token.json`. `1` = use the cache (auto-refresh on staleness, ~90 days). `0` = skip the cache entirely (device-code every bring-up, nothing on disk; use on shared workstations or security-sensitive contexts). `2` = force device-code login and rewrite the cache. The gateway-side encrypted credential copy is unaffected by this knob. |
 | `PHOENIX_COLLECTOR_ENDPOINT` | (none) | Set to e.g. `http://host.openshell.internal:6006/v1/traces` to stream OpenInference traces to a Phoenix collector. ATIF trace generation does not depend on this — NeMo-Relay is always installed and writes ATIF locally to `/tmp/atif/` regardless. |
