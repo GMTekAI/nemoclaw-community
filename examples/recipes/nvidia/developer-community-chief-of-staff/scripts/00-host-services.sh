@@ -71,8 +71,7 @@ cmd_up() {
     # Resolve + export the downstream bucket BEFORE `docker compose up`: s3 /
     # s3-compatible fail loud here if ATIF_RELAY_BUCKET is unset, and compose
     # inherits the resolved value.
-    ATIF_RELAY_BUCKET="$(atif_relay_bucket "$backend")"
-    export ATIF_RELAY_BUCKET
+    export ATIF_RELAY_BUCKET="$(atif_relay_bucket "$backend")"
     profile_args=(--profile "$backend")
     # Generate/read the per-VM bearer from the gitignored cache (not .env) so
     # the relay starts WITH it on the first `up` — no crash-then-recreate.

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Combined stack: Phoenix telemetry + source ETLs.
-# Usage: docker compose up --build
+# Start through ../scripts/00-host-services.sh up so host CA preflight runs
+# before Compose evaluates bind mounts.
 
 services:
 
@@ -69,7 +70,12 @@ services:
       REQUESTS_CA_BUNDLE: /etc/ssl/certs/ca-certificates.crt
     volumes:
       - github-etl-state:/var/lib/github-etl/state
-      - "${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/etc/ssl/certs/ca-certificates.crt:ro"
+      - type: bind
+        source: "${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+        target: /etc/ssl/certs/ca-certificates.crt
+        read_only: true
+        bind:
+          create_host_path: false
 
   forums-etl:
     build:
@@ -92,7 +98,12 @@ services:
       # Mount the managed host bundle to keep forum TLS verification enabled.
       SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
     volumes:
-      - "${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/etc/ssl/certs/ca-certificates.crt:ro"
+      - type: bind
+        source: "${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+        target: /etc/ssl/certs/ca-certificates.crt
+        read_only: true
+        bind:
+          create_host_path: false
 
   postgrest:
     image: postgrest/postgrest:v13.0.4
@@ -130,7 +141,12 @@ services:
       # TLS cert + key for the HTTPS listener. Generated on bring-up by
       # scripts/00-host-services.sh via atif-export-relay/generate-tls-cert.sh.
       - ./atif-export-relay/tls:/etc/atif-export-relay/tls:ro
-      - "${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/etc/ssl/certs/ca-certificates.crt:ro"
+      - type: bind
+        source: "${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+        target: /etc/ssl/certs/ca-certificates.crt
+        read_only: true
+        bind:
+          create_host_path: false
     environment:
       ATIF_RELAY_DOWNSTREAM: "${ATIF_RELAY_BACKEND:-minio}"
       ATIF_RELAY_BIND_ADDR: "${ATIF_RELAY_BIND_ADDR:-0.0.0.0:${ATIF_RELAY_PORT:-18443}}"

@@ -30,9 +30,9 @@ COPY certs/ /usr/local/share/ca-certificates/
 # token is not an ARG/ENV and does not persist into the final image.
 RUN --mount=type=secret,id=github_token,required=false \
     mkdir -p /out/bin \
+    && update-ca-certificates \
     && apt-get update -qq \
     && apt-get install -y --no-install-recommends ca-certificates curl \
-    && update-ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && ARCH="$(uname -m)" \
     && case "$ARCH" in \

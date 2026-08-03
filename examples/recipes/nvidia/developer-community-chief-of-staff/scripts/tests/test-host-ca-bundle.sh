@@ -15,12 +15,35 @@ assert_contains() {
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-EXAMPLE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
-HOST_SERVICES="$EXAMPLE_DIR/scripts/00-host-services.sh"
+SOURCE_EXAMPLE_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TEST_ROOT="$(mktemp -d)"
 trap 'chmod 600 "$TEST_ROOT/unreadable.crt" 2>/dev/null || true; rm -rf "$TEST_ROOT"' EXIT
+EXAMPLE_DIR="$TEST_ROOT/example"
+HOST_SERVICES="$EXAMPLE_DIR/scripts/00-host-services.sh"
 DOCKER_LOG="$TEST_ROOT/docker.log"
 export DOCKER_LOG
+
+# Exercise an isolated copy so an ignored real .env cannot override test
+# inputs or expose credentials to the test process.
+mkdir -p "$EXAMPLE_DIR/scripts" "$EXAMPLE_DIR/extras"
+cp "$SOURCE_EXAMPLE_DIR/scripts/_lib.sh" \
+  "$SOURCE_EXAMPLE_DIR/scripts/00-host-services.sh" \
+  "$EXAMPLE_DIR/scripts/"
+: >"$EXAMPLE_DIR/extras/docker-compose.yml"
+
+COMPOSE_SOURCE="$SOURCE_EXAMPLE_DIR/extras/docker-compose.yml"
+[[ "$(grep -Fc 'create_host_path: false' "$COMPOSE_SOURCE")" == "3" ]] \
+  || fail "every host CA bind must reject a missing source path"
+grep -Fq '00-host-services.sh up' "$COMPOSE_SOURCE" \
+  || fail "Compose usage must route through the host CA preflight"
+! grep -Fq 'Usage: docker compose up' "$COMPOSE_SOURCE" \
+  || fail "Compose must not advertise a preflight-bypassing startup command"
+
+DOCKERFILE_SOURCE="$SOURCE_EXAMPLE_DIR/agents/hermes/Dockerfile"
+first_ca_update="$(grep -n '&& update-ca-certificates' "$DOCKERFILE_SOURCE" | head -1 | cut -d: -f1)"
+first_apt_update="$(grep -n '&& apt-get update -qq' "$DOCKERFILE_SOURCE" | head -1 | cut -d: -f1)"
+[[ -n "$first_ca_update" && -n "$first_apt_update" && "$first_ca_update" -lt "$first_apt_update" ]] \
+  || fail "builder must register copied enterprise CAs before its first apt request"
 
 docker() {
   {
