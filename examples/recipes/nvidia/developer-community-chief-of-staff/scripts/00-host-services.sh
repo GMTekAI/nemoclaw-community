@@ -48,14 +48,31 @@ Usage: $(basename "$0") [up|down [--volumes]]
 EOF
 }
 
+assert_host_ca_bundle() {
+  local bundle="${NEMOCLAW_HOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+
+  if [[ "$bundle" != /* ]]; then
+    echo "NEMOCLAW_HOST_CA_BUNDLE must be an absolute path: $bundle" >&2
+    return 1
+  fi
+  if [[ ! -f "$bundle" || ! -r "$bundle" ]]; then
+    echo "NEMOCLAW_HOST_CA_BUNDLE must be a readable regular file: $bundle" >&2
+    return 1
+  fi
+
+  export NEMOCLAW_HOST_CA_BUNDLE="$bundle"
+}
+
 cmd_up() {
+  assert_host_ca_bundle
   local profile_args=() backend=""
   if atif_remote_enabled; then
     backend="$(atif_relay_backend)"   # validates s3|minio (loud error if unset)
     # Resolve + export the downstream bucket BEFORE `docker compose up`: s3 /
     # s3-compatible fail loud here if ATIF_RELAY_BUCKET is unset, and compose
     # inherits the resolved value.
-    export ATIF_RELAY_BUCKET="$(atif_relay_bucket "$backend")"
+    ATIF_RELAY_BUCKET="$(atif_relay_bucket "$backend")"
+    export ATIF_RELAY_BUCKET
     profile_args=(--profile "$backend")
     # Generate/read the per-VM bearer from the gitignored cache (not .env) so
     # the relay starts WITH it on the first `up` — no crash-then-recreate.

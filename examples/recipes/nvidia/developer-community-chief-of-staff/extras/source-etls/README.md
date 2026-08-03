@@ -47,12 +47,12 @@ Export the repo root `.env` before running compose. Relevant variables:
 
 ## Run
 
-Run this after exporting the example root `.env`.
+Run this from the example root. The lifecycle script loads `.env`, validates
+the host CA bundle before Compose can create a bind-mount source, and starts
+the complete host-service stack.
 
 ```bash
-set -a && source .env && set +a
-cd source-etls
-docker compose up -d --build
+bash scripts/00-host-services.sh up
 ```
 
 The ETL containers run once immediately on startup and then sleep until the next
