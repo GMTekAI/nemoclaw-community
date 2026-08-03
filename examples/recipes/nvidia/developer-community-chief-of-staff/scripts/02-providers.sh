@@ -115,6 +115,7 @@ if [[ -n "${OUTLOOK_CLIENT_ID:-}" ]]; then
   login_json=""
   mode="${OUTLOOK_LOGIN_CACHE:-1}"
   reused_outlook_cache=false
+  cache_write_pending=false
 
   outlook_device_login() {
     local login_hint_args=()
@@ -126,11 +127,19 @@ if [[ -n "${OUTLOOK_CLIENT_ID:-}" ]]; then
   }
 
   write_outlook_login_cache() {
-    local payload="$1"
-    mkdir -p "$(dirname "$OUTLOOK_LOGIN_CACHE_PATH")"
+    local payload="$1" cache_dir cache_tmp
+    cache_dir="$(dirname "$OUTLOOK_LOGIN_CACHE_PATH")"
+    mkdir -p "$cache_dir"
     umask 077
-    printf '%s\n' "$payload" > "$OUTLOOK_LOGIN_CACHE_PATH"
-    chmod 600 "$OUTLOOK_LOGIN_CACHE_PATH"
+    cache_tmp="$(mktemp "$cache_dir/.ms-graph-token.json.XXXXXX")"
+    if ! printf '%s\n' "$payload" > "$cache_tmp"; then
+      rm -f "$cache_tmp"
+      return 1
+    fi
+    if ! chmod 600 "$cache_tmp" || ! mv -f "$cache_tmp" "$OUTLOOK_LOGIN_CACHE_PATH"; then
+      rm -f "$cache_tmp"
+      return 1
+    fi
   }
 
   # Mode 1: try the cache, with a freshness check on the refresh-token
@@ -159,9 +168,11 @@ if [[ -n "${OUTLOOK_CLIENT_ID:-}" ]]; then
       2) echo "OUTLOOK_LOGIN_CACHE=2 — forcing device-code login + cache rewrite" ;;
     esac
     login_json="$(outlook_device_login)"
-    # Modes 1 and 2 write the cache; mode 0 doesn't.
+    # Modes 1 and 2 write only after the gateway successfully rotates the
+    # credential. This keeps a prior cache intact when configuration or
+    # rotation fails.
     if [[ "$mode" != "0" ]]; then
-      write_outlook_login_cache "$login_json"
+      cache_write_pending=true
     fi
   fi
 
@@ -185,17 +196,56 @@ if [[ -n "${OUTLOOK_CLIENT_ID:-}" ]]; then
       --credential-expires-at "$expires_at_ms"
   }
 
+  outlook_refresh_status() {
+    NO_COLOR=1 openshell provider refresh status "$OUTLOOK_PROVIDER" \
+      --credential-key MS_GRAPH_ACCESS_TOKEN 2>&1 \
+      | sed $'s/\x1b\\[[0-9;]*m//g'
+  }
+
   configure_outlook_refresh "$login_json"
-  if ! openshell provider refresh rotate "$OUTLOOK_PROVIDER" --credential-key MS_GRAPH_ACCESS_TOKEN; then
+  rotate_output=""
+  if rotate_output="$(
+    openshell provider refresh rotate "$OUTLOOK_PROVIDER" \
+      --credential-key MS_GRAPH_ACCESS_TOKEN 2>&1
+  )"; then
+    [[ -z "$rotate_output" ]] || printf '%s\n' "$rotate_output"
+    if "$cache_write_pending"; then
+      write_outlook_login_cache "$login_json"
+    fi
+  else
+    [[ -z "$rotate_output" ]] || printf '%s\n' "$rotate_output" >&2
     if ! "$reused_outlook_cache"; then
-      echo "Microsoft refresh-token rotation failed after device-code login" >&2
+      echo "Microsoft refresh-token rotation failed after device-code login; the login cache was not changed" >&2
       exit 1
     fi
-    echo "Cached Microsoft refresh token was rejected; re-running device-code login"
-    login_json="$(outlook_device_login)"
-    write_outlook_login_cache "$login_json"
-    configure_outlook_refresh "$login_json"
-    openshell provider refresh rotate "$OUTLOOK_PROVIDER" --credential-key MS_GRAPH_ACCESS_TOKEN
+
+    refresh_status=""
+    if ! refresh_status="$(outlook_refresh_status)"; then
+      [[ -z "$refresh_status" ]] || printf '%s\n' "$refresh_status" >&2
+      echo "Could not classify the cached-token rotation failure; the existing login cache was preserved" >&2
+      exit 1
+    fi
+    if ! grep -qE 'token endpoint returned HTTP 400([^0-9]|$)' <<<"$refresh_status"; then
+      [[ -z "$refresh_status" ]] || printf '%s\n' "$refresh_status" >&2
+      echo "Cached-token rotation failed without a confirmed HTTP 400 endpoint rejection; the existing login cache was preserved" >&2
+      exit 1
+    fi
+
+    echo "The token endpoint rejected the cached Microsoft credential (HTTP 400); re-running device-code login"
+    fresh_login_json="$(outlook_device_login)"
+    configure_outlook_refresh "$fresh_login_json"
+    retry_output=""
+    if retry_output="$(
+      openshell provider refresh rotate "$OUTLOOK_PROVIDER" \
+        --credential-key MS_GRAPH_ACCESS_TOKEN 2>&1
+    )"; then
+      [[ -z "$retry_output" ]] || printf '%s\n' "$retry_output"
+      write_outlook_login_cache "$fresh_login_json"
+    else
+      [[ -z "$retry_output" ]] || printf '%s\n' "$retry_output" >&2
+      echo "Microsoft refresh-token rotation failed after device-code login; the existing login cache was preserved" >&2
+      exit 1
+    fi
   fi
 fi
 
