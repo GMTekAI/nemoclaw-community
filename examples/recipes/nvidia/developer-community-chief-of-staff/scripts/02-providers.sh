@@ -69,8 +69,34 @@ for profile_file in outlook-email.yaml slack.yaml github.yaml atif-export-relay.
   fi
 done
 
+# Keep preflight subprocesses isolated from unrelated host state while
+# preserving the standard proxy and CA settings needed on enterprise networks.
+PREFLIGHT_NETWORK_ENV=(
+  "HOME=$HOME"
+  "PATH=$PATH"
+  "HTTP_PROXY=${HTTP_PROXY:-}"
+  "HTTPS_PROXY=${HTTPS_PROXY:-}"
+  "ALL_PROXY=${ALL_PROXY:-}"
+  "NO_PROXY=${NO_PROXY:-}"
+  "http_proxy=${http_proxy:-}"
+  "https_proxy=${https_proxy:-}"
+  "all_proxy=${all_proxy:-}"
+  "no_proxy=${no_proxy:-}"
+  "SSL_CERT_FILE=${SSL_CERT_FILE:-}"
+  "SSL_CERT_DIR=${SSL_CERT_DIR:-}"
+)
+
 # ── Inference provider (built-in nvidia v2 profile via inference.local) ─
 INFERENCE_KEY="${OPENAI_API_KEY:-${COMPATIBLE_API_KEY:-}}"
+INFERENCE_PREFLIGHT="${NEMOCLAW_INFERENCE_PREFLIGHT:-1}"
+case "$INFERENCE_PREFLIGHT" in
+  0|1) ;;
+  *)
+    echo "Invalid NEMOCLAW_INFERENCE_PREFLIGHT=$INFERENCE_PREFLIGHT (expected 0 or 1)" >&2
+    exit 1
+    ;;
+esac
+
 if [[ -n "$INFERENCE_KEY" ]]; then
   INFERENCE_PROVIDER="compatible-endpoint"
   INFERENCE_MODEL="${NEMOCLAW_MODEL:-nvidia/nemotron-3-super-120b-a12b}"
@@ -97,10 +123,27 @@ if [[ -n "$INFERENCE_KEY" ]]; then
         --credential NVIDIA_API_KEY --config "NVIDIA_BASE_URL=$INFERENCE_BASE_URL"
   fi
 
+  if [[ "$INFERENCE_PREFLIGHT" == "1" ]]; then
+    echo "Validating inference endpoint, credential, and model before sandbox creation"
+    env -i "${PREFLIGHT_NETWORK_ENV[@]}" \
+      NEMOCLAW_INFERENCE_PREFLIGHT_KEY="$INFERENCE_KEY" \
+      python3 "$DIR/inference_preflight.py" \
+        --endpoint "$INFERENCE_BASE_URL" \
+        --model "$INFERENCE_MODEL" \
+        --timeout "${NEMOCLAW_INFERENCE_PREFLIGHT_TIMEOUT_SECONDS:-10}"
+  else
+    echo "WARNING: inference preflight bypassed (NEMOCLAW_INFERENCE_PREFLIGHT=0)" >&2
+  fi
+
   echo "Setting cluster inference: provider=$INFERENCE_PROVIDER model=$INFERENCE_MODEL"
   openshell inference set --no-verify --provider "$INFERENCE_PROVIDER" --model "$INFERENCE_MODEL"
 else
-  echo "WARNING: neither OPENAI_API_KEY nor COMPATIBLE_API_KEY is set — skipping inference provider. The agent will have no LLM." >&2
+  if [[ "$INFERENCE_PREFLIGHT" == "1" ]]; then
+    echo "Inference preflight failed (configuration): neither OPENAI_API_KEY nor COMPATIBLE_API_KEY is set." >&2
+    echo "Set a credential, or set NEMOCLAW_INFERENCE_PREFLIGHT=0 for intentional offline setup." >&2
+    exit 1
+  fi
+  echo "WARNING: inference preflight bypassed and no credential is set. The agent will have no LLM." >&2
 fi
 
 # ── Outlook provider with gateway-managed OAuth refresh ─────────────────
@@ -253,7 +296,7 @@ fi
 if [[ -n "${SLACK_BOT_TOKEN:-}" || -n "${SLACK_APP_TOKEN:-}" ]]; then
   SLACK_PROVIDER="$SANDBOX_NAME-slack"
   echo "Validating Slack app token and Socket Mode scope before provider creation"
-  env -i HOME="$HOME" PATH="$PATH" \
+  env -i "${PREFLIGHT_NETWORK_ENV[@]}" \
     NEMOCLAW_SLACK_PREFLIGHT_TOKEN="${SLACK_APP_TOKEN:-}" \
     NEMOCLAW_SLACK_PREFLIGHT_TIMEOUT_SECONDS="${NEMOCLAW_SLACK_PREFLIGHT_TIMEOUT_SECONDS:-10}" \
     python3 "$DIR/slack_socket_preflight.py"

@@ -206,6 +206,7 @@ exec "$REAL_PYTHON" "$@"
         "OUTLOOK_TARGET_MAILBOX": "agent@example.test",
         "OUTLOOK_LOGIN_CACHE": mode,
         "ATIF_EXPORT_MODE": "local",
+        "NEMOCLAW_INFERENCE_PREFLIGHT": "0",
     }
     for name in (
         "OPENAI_API_KEY",
