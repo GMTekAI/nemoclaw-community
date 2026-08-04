@@ -70,8 +70,13 @@ The manifest configures:
 
 1. In your new app's settings, click **Socket Mode** in the left sidebar.
 2. Toggle **Enable Socket Mode** on.
-3. When prompted, name the app-level token (for example `nemoclaw-socket`) and click **Generate**.
-4. Copy the token. It starts with `xapp-`.
+3. When prompted, name the app-level token (for example `nemoclaw-socket`).
+4. Add the app-level scope
+   **[`connections:write`](https://docs.slack.dev/reference/scopes/connections.write/)**.
+   Slack requires this scope for
+   [`apps.connections.open`](https://api.slack.com/methods/apps.connections.open)
+   to generate the Socket Mode WebSocket URL.
+5. Click **Generate**, then copy the token. It starts with `xapp-`.
 
 Save it for the `.env` step below — this is `SLACK_APP_TOKEN`.
 
@@ -135,6 +140,9 @@ $ bash scripts/bring-up.sh
 
 The script (auto-sources `.env` if needed) does the following for Slack:
 
+- Calls `apps.connections.open` with a bounded request to verify that the app
+  token is valid, has `connections:write`, and can create a Socket Mode URL.
+  Setup stops before provider and sandbox creation when this check fails.
 - Creates an OpenShell provider `<sandbox>-slack` with both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` credentials (one v2 provider, two credentials).
 - Bakes `slack` into the sandbox image's channel list (`NEMOCLAW_MESSAGING_CHANNELS_B64`) alongside `outlook`.
 - Injects `SLACK_ALLOWED_IDS` as the gateway's `SLACK_ALLOWED_USERS` at sandbox-create time (runtime `-- env`, not baked into the image). An empty allowlist sets `SLACK_ALLOW_ALL_USERS=true` so any workspace user can DM the bot.
