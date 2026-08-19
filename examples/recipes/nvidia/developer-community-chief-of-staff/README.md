@@ -25,7 +25,7 @@ This is a personal agent designed to run on a **managed image/VM provisioned by
 enterprise IT** (e.g. Ubuntu) — one you authenticate into, that ships sanctioned
 pre-installed software and can reach only specific resources. The agent rides that
 infrastructure with *delegated* access: its credentials live in OpenShell providers
-(GitHub, Slack, Microsoft Graph), and it acts on your behalf within them.
+(GitHub, GitLab, Slack, Microsoft Graph), and it acts on your behalf within them.
 
 Protection is layered. The managed image provides **coarse** protections (authenticated
 access, a restricted set of reachable resources, host hardening). OpenShell adds
@@ -48,7 +48,9 @@ live to Slack and Outlook for interactions and research. It also has
 authenticated, read-only GitHub REST access to an exact repository allowlist
 (`GITHUB_READONLY_REPOS`). The GitHub access token is attached through an
 OpenShell provider placeholder so GitHub rate limits are practical, while
-`policy.yaml` still limits the sandbox to repository-scoped `GET` requests. GitHub discussions,
+`policy.yaml` still limits the sandbox to repository-scoped `GET` requests.
+Optional GitLab access uses the same credential-isolation pattern and supports
+multiple explicitly allowlisted projects. GitHub discussions,
 historical mirror data, and NVIDIA forum data come from host-side ETL
 containers that scrape on a schedule, write results into Postgres, and expose
 that mirror through a read-only PostgREST HTTP bridge.
@@ -66,6 +68,7 @@ flowchart LR
     entra["Internal\nMS Entra ID"]
     slack["Internal\nSlack workspace"]
     outlook["Internal\ngraph.microsoft.com\nmailbox"]
+    gitlab["Private\nGitLab REST API"]
     github["External\nGitHub API"]
     tavily["External\nTavily Search API"]
     forums["External\nNVIDIA Forums\n(nemoclaw tag)"]
@@ -92,6 +95,7 @@ flowchart LR
                 subgraph sourceSkills["Source Skills"]
                     direction LR
                     s1["source-etl-query"]
+                    s2["gitlab-readonly-live"]
                     s4["cross-source-gap-analysis"]
                 end
 
@@ -152,6 +156,7 @@ flowchart LR
     l7 <-->|"WSS / HTTPS POST\nSlack messaging"| slack
     l7 -->|"HTTPS GET/POST\nGraph API"| outlook
     l7 -->|"HTTPS GET\nGitHub REST"| github
+    l7 -->|"HTTPS GET\nproject-scoped GitLab REST"| gitlab
     l7 -->|"HTTPS POST /search\nAPI key substituted"| tavily
     atifRelay -->|"boto3 PutObject"| s3
     gateway <-->|"HTTPS POST\ntoken rotation"| entra
@@ -183,13 +188,14 @@ flowchart LR
 
     classDef internal fill:#eef7e9,stroke:#6aa84f,stroke-width:2px
     classDef external fill:#fce5cd,stroke:#e69138,stroke-width:2px
-    class nvidia,slack,outlook,entra,s3 internal
+    class nvidia,slack,outlook,gitlab,entra,s3 internal
     class github,forums,tavily external
 ```
 
 **Key invariants:**
 
 - The agent has authenticated read-only `api.github.com` access for an exact repository allowlist. The raw GitHub access token stays in an OpenShell provider; the sandbox sees only a placeholder, and policy still blocks writes, non-API GitHub hosts, `git`, and `gh`.
+- The agent can have authenticated read-only access to multiple explicitly configured GitLab projects. Policy permits only selected project-data routes and blocks writes plus sensitive endpoints such as CI/CD variables, hooks, tokens, runners, and members.
 - Public web search is disabled by default. When configured, the raw Tavily API
   key stays in an OpenShell provider and the sandbox can call only
   `POST api.tavily.com/search` from Hermes's pinned Python runtime. Page
@@ -209,6 +215,7 @@ Skills are loaded on demand by the agent when relevant to a task. They live in [
 | Skill | Purpose |
 |-------|---------|
 | `github-readonly-live` | Query the configured live GitHub repo via authenticated, policy-scoped REST `GET` requests. |
+| `gitlab-readonly-live` | Query one of the explicitly allowed GitLab projects via authenticated, project-scoped REST `GET` requests. |
 | `source-etl-query` | Query the host-side PostgREST bridge for mirrored GitHub discussions, historical mirror data, and NVIDIA forum data. |
 | `slack-channel-finder` | Discover Slack channels by topic, team, or domain and infer what each channel is for. |
 | `slack-channel-summarizer` | Resolve Slack channels by name or ID and read message history via the Slack Web API. |
@@ -575,6 +582,7 @@ bearer header; the OpenShell L7 proxy substitutes a live token on egress.
 | `<sandbox>-outlook` | `nemoclaw-outlook-email` | `MS_GRAPH_ACCESS_TOKEN` (auto-rotated by the gateway from the registered refresh token). Refresh material: `OUTLOOK_TENANT_ID`, `OUTLOOK_CLIENT_ID`, refresh_token (cached from device-code login). | Optional. Created only when the Outlook block is fully populated; partial config is rejected. At least one of Outlook or Slack must be configured. |
 | `<sandbox>-slack` | `nemoclaw-slack` | `SLACK_BOT_TOKEN` (Web API) + `SLACK_APP_TOKEN` (Socket Mode) | Optional. Before provider creation, setup verifies that the app token can call `apps.connections.open` with `connections:write`. At least one of Outlook or Slack must be configured. |
 | `<sandbox>-github` | `nemoclaw-github` | `GITHUB_TOKEN` | Optional but recommended. Enables authenticated live GitHub REST reads. The sandbox receives only the OpenShell placeholder; `policy.yaml` further limits use to repository-scoped `GET` routes from approved binaries. |
+| `<sandbox>-gitlab` | `nemoclaw-gitlab` | `GITLAB_TOKEN` | Optional. Enables authenticated GitLab REST reads. `policy.yaml` expands a separate GET-only path allowlist for every project in `GITLAB_READONLY_PROJECTS`; sensitive project endpoints remain blocked. |
 | `<sandbox>-tavily-search` | `nemoclaw-tavily-search` | `TAVILY_API_KEY` | Optional and disabled when the key is absent. Setup validates the key before provider creation. Request-body placeholder rewriting supports Hermes's native `web_search`; provider and sandbox policies allow only `POST /search` from `/opt/hermes/.venv/bin/python`. |
 | `<sandbox>-atif-export-relay` | `nemoclaw-atif-export-relay` | `ATIF_RELAY_AUTH_TOKEN` | Created and attached only when `ATIF_EXPORT_MODE=relay`. Allows the Python ATIF bridge to send `POST /atif` to the configured host relay; the provider owns the endpoint, path, binary, private-IP, and credential restrictions. |
 
@@ -589,7 +597,8 @@ Sandbox network policy ([`policy.yaml`](policy.yaml)) layers on top of the per-p
 endpoint scopes above. For most providers the profile is the sole source of policy;
 `policy.yaml` only carries restrictions that the v2 ProviderProfile schema can't
 express today — specifically per-path allow rules (used to scope the NVIDIA inference
-API to specific `/v1/*` paths and GitHub reads to an exact repository allowlist)
+API to specific `/v1/*` paths, GitHub reads to an exact repository allowlist,
+and GitLab reads to explicitly listed projects via `GITLAB_READONLY_PROJECTS`)
 and credential-less host-routed services (Phoenix collector, Source-ETL API). Surviving
 `network_policies` blocks in `policy.yaml` carry **load-bearing comments** explaining
 why they can't be folded into provider profiles. Fully-redundant blocks (e.g. the
@@ -661,6 +670,36 @@ discussions/history, then rerun
 `bash scripts/00-host-services.sh`. Existing mirror database/state is preserved
 unless you remove the compose volumes.
 
+## Changing the available live GitLab projects
+
+GitLab access is optional and supports one or more explicit project paths; it
+is not limited to a single repository:
+
+1. Create a GitLab personal access token with `read_api` scope and set
+   `GITLAB_TOKEN` in `.env`.
+2. Set a comma-separated allowlist, for example:
+
+```bash
+GITLAB_READONLY_PROJECTS=example-team/project-one,group/subgroup/project-two
+```
+
+3. If necessary, set `GITLAB_API_URL` to the REST v4 base for the GitLab
+   deployment. The value must have the form `https://host[:port]/api/v4`.
+4. Rerun `bash scripts/bring-up.sh`. Changing the allowlist requires sandbox
+   recreation because the exact project paths are compiled into policy.
+
+During sandbox creation, each configured path is resolved to its canonical
+numeric project ID. The staged policy receives GET-only rules for that ID; the
+sandbox itself receives only the friendly path-to-ID mapping and the OpenShell
+credential placeholder. The raw token is never baked into the image.
+
+The helper selects the project automatically when only one is configured. With
+multiple projects, pass `--project group/project`. Issues, merge requests,
+repository content and history, labels, milestones, and releases are readable.
+The bare project-metadata response is blocked because GitLab may include
+sensitive fields in it for privileged identities. Variables, hooks, tokens,
+runners, members, writes, `glab`, and `git` remain blocked.
+
 ## Configuration knobs (all env vars)
 
 | Var | Default | What it does |
@@ -680,6 +719,9 @@ unless you remove the compose volumes.
 | `GITHUB_TOKEN` | (none) | Optional GitHub access token for authenticated live REST reads. Also feeds the optional host GitHub mirror. |
 | `GITHUB_READONLY_REPOS` | `NVIDIA/OpenShell` | Comma-separated exact allowlist for the live GitHub REST policy. Each item uses `owner/repository`. Recreate the sandbox after changing it. |
 | `GITHUB_READONLY_REPO` | `NVIDIA/OpenShell` | Backward-compatible single-repository setting. It is used only when `GITHUB_READONLY_REPOS` is empty or absent. |
+| `GITLAB_TOKEN` | (none) | Optional GitLab PAT. Use `read_api` scope; the sandbox receives only the OpenShell credential placeholder. |
+| `GITLAB_READONLY_PROJECTS` | (none) | Comma-separated GitLab project paths (`group/project` or `group/subgroup/project`). Each receives its own GET-only policy rules when the sandbox is created. |
+| `GITLAB_API_URL` | `https://gitlab.example.com/api/v4` | GitLab REST v4 base, formatted as `https://host[:port]/api/v4`. Replace the example hostname for your deployment; the provider and network policy remain scoped to its exact host and port. |
 | `TAVILY_API_KEY` | (none) | Enables search-only public-web discovery. The host holds the raw API key; the sandbox receives an OpenShell placeholder. Recreate the sandbox after adding, changing, or removing it. |
 | `NEMOCLAW_TAVILY_PREFLIGHT_TIMEOUT_SECONDS` | `10` | Maximum time for the bounded Tavily key-validation request during provider setup. |
 | `SOURCE_ETL_GITHUB_ENABLED` | `0` | Set to `1` to start the host-side GitHub mirror. A live-read `GITHUB_TOKEN` alone does not enable the ETL. |
