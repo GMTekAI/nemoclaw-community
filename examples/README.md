@@ -30,6 +30,7 @@ again by contributor provenance.
 
 | Example | Description |
 | --- | --- |
+| [Axe A11y Browser Auditor](recipes/community/axe-a11y-browser-auditor/README.md) | Performs automated WCAG accessibility audits, visual screenshots, PDF exports, and network tracing via a sidecar MCP server using axe-core and Patchright with real Google Chrome. |
 | [Deep Research Worker](recipes/community/deep-research-worker/README.md) | Queues long-running research tasks from one sandbox to a host-side DeepAgents worker, with a narrow worker-only sandbox policy and optional read-only host-side search integrations. |
 
 ## NVIDIA Field Demos
