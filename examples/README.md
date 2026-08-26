@@ -50,6 +50,7 @@ again by contributor provenance.
 
 | Example | Description |
 | --- | --- |
+| [Agent Memory Benchmark](tools/agent-memory-benchmark/README.md) | Measures the memory a system builds from a corpus: it feeds a system synthetic email and chat, asks 186 questions on one corpus and 96 on a second, and reports accuracy per question type alongside ingest and per-answer token cost. |
 | [Harness Engineering Playground](tools/harness-engineering-playground/README.md) | Provides an experimental command-line interface for evaluation-driven harness profile optimization. |
 
 ## Contributing An Example
