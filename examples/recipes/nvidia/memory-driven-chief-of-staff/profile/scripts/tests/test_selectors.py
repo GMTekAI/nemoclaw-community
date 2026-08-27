@@ -146,7 +146,7 @@ class TestSchedulerIntegrationContract(unittest.TestCase):
     registration script. Neither was covered, and one of them was already
     false — the script looked jobs up with `cron list --json`, a flag the CLI
     does not have, so the lookup always came back empty and every run created
-    another copy of all five jobs.
+    another copy of all seven jobs.
     """
 
     RECIPE = HERE.parents[1]
@@ -502,7 +502,7 @@ class TestTheInstallerRefusesTheWrongPlatform(unittest.TestCase):
     """Documentation that says "Linux only" and code that installs anywhere.
 
     The README states the scheduled path does not work on macOS, and the
-    scripts installed and registered five jobs there regardless — producing
+    scripts installed and registered seven jobs there regardless — producing
     exactly the model-without-skill calls the same document warns about. A
     warning nothing enforces is not a warning.
     """
@@ -696,7 +696,7 @@ class TestTheInstallerCarriesSettingsNotSecrets(unittest.TestCase):
         self.assertNotEqual(register, -1, "installer no longer registers jobs")
         self.assertLess(check, register,
                         "the check must precede registration, or the exit "
-                        "leaves five jobs scheduled against a dead profile")
+                        "leaves seven jobs scheduled against a dead profile")
 
     def test_an_unresolvable_model_exits_non_zero(self):
         """The check has to end the run, not merely print a complaint."""
@@ -858,7 +858,7 @@ class TestAFailedTransferStopsTheInstall(unittest.TestCase):
     `false && echo` is a no-op, not an abort. So a profile could take
     `model.default`, silently drop `model.provider` and `model.base_url`, pass
     the model check — which only asks about `model.default` — pass the
-    credential check, and get all five jobs registered against whatever route
+    credential check, and get all seven jobs registered against whatever route
     it had left.
 
     Exit status alone is also not proof the value landed, so each carried
@@ -1214,7 +1214,7 @@ esac
         out = self.refuses_policy({"binaries": []}, "unbounded by binary")
         self.assertIn("binary", out)
 
-    VALIDATOR = RECIPE / "scripts" / "validate-slack-profile.sh"
+    VALIDATOR = RECIPE / "scripts" / "validate-provider-profile.sh"
 
     def validate(self, policy):
         """Run the shipped validator against a profile with one field bent.
@@ -1232,7 +1232,8 @@ esac
                 capture_output=True, text=True,
                 env={"PATH": f"{folder}:{os.environ['PATH']}",
                      "HOME": str(folder),
-                     "USABLE_KEY": "SLACK_USER_TOKEN"})
+                     "USABLE_KEY": "SLACK_USER_TOKEN",
+                     "WANT_HOST": "slack.com"})
         return proc.returncode, proc.stdout + proc.stderr
 
     def test_the_expected_profile_passes(self):
@@ -1312,12 +1313,21 @@ esac
                       "the acknowledged path should reach the reuse branch")
 
     def test_an_unconfirmed_prerequisite_aborts(self):
-        code = "\n".join(line for line in self.SCRIPT.read_text().splitlines()
-                         if not line.lstrip().startswith("#"))
-        window = code[code.find("STORE_ENCRYPTION_ACKNOWLEDGED"):
-                      code.find("sandbox provider attach")]
-        self.assertIn("exit 1", window,
-                      "an unconfirmed prerequisite must abort, not warn")
+        """Run it rather than search the source for `exit 1`.
+
+        The previous form looked between two strings in `setup-slack.sh`. The
+        gate has since moved into a file both setup flows source, so the
+        search window emptied and the test passed on nothing — the same shape
+        of failure that let the reuse-path bypass ship.
+        """
+        with tempfile.TemporaryDirectory() as folder:
+            folder = Path(folder)
+            self.fake_openshell(folder)
+            proc = self.run_setup(folder, {
+                "SANDBOX_STORAGE_PATH": str(folder)})
+        self.assertNotEqual(proc.returncode, 0,
+                            "an unconfirmed prerequisite must abort, not warn")
+        self.assertNotIn("Nothing to do", proc.stdout)
 
     def test_the_docs_point_at_the_page(self):
         for name in ("README.md", "docs/set-up-slack.md"):

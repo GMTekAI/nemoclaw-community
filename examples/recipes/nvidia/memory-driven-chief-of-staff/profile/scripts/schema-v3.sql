@@ -1,3 +1,10 @@
+-- FROZEN. The v3 schema exactly as it shipped in #140.
+--
+-- Kept so the v3 -> v4 migration is tested against the database people
+-- actually have, rather than against the current schema with columns
+-- removed — a state that never existed and cannot fail the way a real one
+-- does. Never edit this file; add a migration instead.
+--
 -- Ledger store for the memory-driven chief-of-staff recipe.
 --
 -- Target runtime : SQLite bundled with Hermes 0.19.0 (the version the current
@@ -22,7 +29,7 @@ CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '4');
+INSERT OR IGNORE INTO meta(key, value) VALUES ('schema_version', '3');
 
 
 -- ---------------------------------------------------------------------------
@@ -54,28 +61,13 @@ CREATE TABLE IF NOT EXISTS items (
     -- string they happen to be displayed as. Nullable: rows collected before
     -- this column existed have none, and a collector that cannot supply one
     -- is not a reason to refuse the message.
-    sender_key  TEXT,                       -- address or user id, never a name
+    sender_key  TEXT,                       -- display name or address
     subject     TEXT,                       -- NULL for slack
     body        TEXT,
     -- Set when the retention pass clears `body`, and never otherwise. It is
     -- what tells a cleared message from one that never carried text: both
     -- leave `body` NULL, and only one of them is a message somebody sent.
     body_cleared_at TEXT,
-    -- Set when the source says the message is gone. Distinct from
-    -- `body_cleared_at`, which records this recipe ageing the text out on its
-    -- own schedule: one is the person deleting something, the other is us
-    -- forgetting it, and a report that conflates them answers the wrong
-    -- question. The row survives either way, because obligations and events
-    -- hang off `source_id` and removing it would break the audit trail.
-    deleted_at    TEXT,
-    -- The message's own identity, as opposed to its position in a folder.
-    --
-    -- Needed to tell a deletion from a move: the delta query reports both
-    -- identically and the per-folder id changes when a message moves, so
-    -- this is the only thing that survives to ask about. Kept on the row
-    -- rather than in a bounded map beside it — a map that evicts turns an
-    -- older message being filed away into a deletion, and clears its body.
-    internet_message_id TEXT,
     permalink   TEXT,                       -- link back to the source system
 
     -- Normalized across sources, because the judging rules ask the same
@@ -194,3 +186,4 @@ CREATE TABLE IF NOT EXISTS cursors (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
     PRIMARY KEY (source, scope)
 );
+

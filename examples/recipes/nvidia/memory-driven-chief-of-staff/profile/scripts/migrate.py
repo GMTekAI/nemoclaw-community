@@ -22,7 +22,7 @@ import sqlite3
 from pathlib import Path
 from typing import Callable
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # version -> callable applied to reach it. Forward only; there is no down path,
 # because a downgrade that drops a column loses data no backup can infer.
@@ -67,9 +67,30 @@ def _add_sender_key(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE items ADD COLUMN sender_key TEXT")
 
 
+def _add_removal_tracking(conn: sqlite3.Connection) -> None:
+    """v4: somewhere to record that the source removed a message.
+
+    Two columns, one feature. `deleted_at` is the verdict; the message's own
+    `internetMessageId` is what the verdict is reached by, and it has to be
+    on the row because by the time a removal is reported the message is gone
+    and there is nothing left to read it from.
+
+    Added with the Microsoft Graph collector. Idempotent: an ALTER that has
+    already happened is detected rather than attempted, because a migration
+    that fails on a store it already migrated is a migration that only works
+    once.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(items)")}
+    if "deleted_at" not in columns:
+        conn.execute("ALTER TABLE items ADD COLUMN deleted_at TEXT")
+    if "internet_message_id" not in columns:
+        conn.execute("ALTER TABLE items ADD COLUMN internet_message_id TEXT")
+
+
 MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     2: _add_body_cleared_at,
     3: _add_sender_key,
+    4: _add_removal_tracking,
 }
 
 
