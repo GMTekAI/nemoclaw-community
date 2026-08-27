@@ -8,7 +8,7 @@ gets you the cost numbers as well.
 Do this if your system cannot be wrapped in a command line, or you want a score
 without wiring anything up.
 
-**1. Read the corpus, in order.** `corpus/part_a/` first, then `corpus/part_b/`.
+**1. Read the corpus, in order.** `corpus_a/corpus/part_a/` first, then `corpus_a/corpus/part_b/`.
 Walk it recursively rather than hardcoding subdirectory names: corpus A files
 chat under `slack/` and corpus B under `chat/`, so a path-specific reader
 silently ingests zero chat documents on the second corpus. The `doc_id` in each
@@ -19,7 +19,7 @@ version is current. If your system has no notion of ingesting twice, ingest
 everything at once and say so — it changes what your ingest cost means, not
 whether your answers count.
 
-**2. Answer every question in `questions/questions.jsonl`**, each in a fresh
+**2. Answer every question in `corpus_a/questions/questions.jsonl`**, each in a fresh
 context. The questions are independent; answering question 40 with question 39
 still in the conversation is a different task and scores differently. Use this
 instruction verbatim, because every other submission does:
@@ -127,7 +127,7 @@ rules, or the run stops being comparable.
 
 ## Which corpus to run
 
-`corpus/` and `questions/` are corpus A. Corpus B lives in `corpus_b/corpus/`
+`corpus_a/corpus/` and `corpus_a/questions/` are corpus A. Corpus B lives in `corpus_b/corpus/`
 and `corpus_b/questions/`. Pass them explicitly:
 
 ```bash
@@ -161,7 +161,9 @@ not the recipe's own behaviour: the recipe has no question-answering path.
 
 ## Where a result goes
 
-There is no hosted leaderboard and no table renderer ships here: each run
+One pair of reference runs ships under `results/`, as an example of the
+format rather than as a ranking. There is no hosted leaderboard and no table
+renderer ships here: each run
 writes its own `report.json`, and comparing runs is the reader's job. Two
 reports are comparable only when their `fingerprint` blocks match — same
 corpus, same questions, same answer key, same normalization, and the same
