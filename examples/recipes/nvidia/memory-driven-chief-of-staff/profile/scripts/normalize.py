@@ -93,6 +93,9 @@ def graph_message_to_item(msg: dict[str, Any], user_address: str) -> dict[str, A
         # has nothing to match without this — the address is exactly what the
         # user wrote the rule against.
         "sender_address": _address_of(msg.get("from")),
+        # The stable half. `sender` is the display name when there is one,
+        # which two different people can share; the address is theirs.
+        "sender_key": _address_of(msg.get("from")) or None,
         "subject": msg.get("subject"),
         "body": body.get("content"),
         "permalink": msg.get("webLink"),
@@ -137,6 +140,9 @@ def slack_message_to_item(
         # Slack user to a display name, which the person can change at will;
         # without the raw id a `U…` rule matches nothing.
         "sender_id": msg.get("user"),
+        # The stable half, for the same reason: a display name is something
+        # its owner can change, and two people can choose the same one.
+        "sender_key": msg.get("user") or None,
         "subject": None,
         "body": msg.get("text"),
         "permalink": msg.get("permalink"),
@@ -148,7 +154,8 @@ def slack_message_to_item(
 
 ITEM_COLUMNS = (
     "source_id", "source", "scope", "thread_ref", "event_at",
-    "sender", "subject", "body", "permalink", "addressing", "unread",
+    "sender", "sender_key", "subject", "body", "permalink", "addressing",
+    "unread",
 )
 
 
@@ -179,4 +186,22 @@ def insert_items(conn, items) -> int:
     conn.executemany(
         f"INSERT OR IGNORE INTO items({','.join(ITEM_COLUMNS)}) VALUES ({placeholders})",
         rows)
+
+    # Fill in an identity a row does not have yet.
+    #
+    # `INSERT OR IGNORE` leaves an existing row alone, so a store upgraded to
+    # v3 keeps `sender_key IS NULL` on everything it collected before — even
+    # when the collector re-reads the very same message and now knows the
+    # answer. Nothing else about the row is touched, and the value comes from
+    # that message rather than from matching a name against another row, so
+    # this cannot merge two people the way a name-based backfill would.
+    #
+    # It is a floor, not a guarantee: it reaches what the collectors re-read,
+    # which for a rolling window is the recent past and nothing older. What
+    # stays unkeyed is handled by refusing to guess — see `people()`.
+    conn.executemany(
+        "UPDATE items SET sender_key = ?"
+        "  WHERE source_id = ? AND sender_key IS NULL",
+        [(item["sender_key"], item["source_id"]) for item in items
+         if item.get("sender_key") and item.get("source_id")])
     return conn.execute("SELECT count(*) FROM items").fetchone()[0] - before

@@ -91,18 +91,19 @@ those two apart.
 | `profile/scripts/walkthrough.py` | The fixture walkthrough, end to end, with no credentials and no model |
 | `profile/scripts/select_intake.py` | The intake job's pre-step: what to judge, and whether to wake the model at all |
 | `profile/scripts/select_review.py` | The review job's pre-step: the stalest open obligations, oldest review first |
+| `profile/scripts/select_memory.py` | The memory-writing job's pre-step: recurring correspondents, and whether the attention pages have gone stale |
 | `profile/scripts/retention.py` | The retention job: clears message bodies past the window, keeps the record |
 | `profile/scripts/exclusions.py` | Senders, domains and channels that are never written, applied in `insert_items` |
 | `profile/scripts/export_store.py` | Writes the whole store and memory out as Markdown beside JSON |
 | `profile/scripts/reset.py` | Removes the store, the memory and the learned policy together |
+| `profile/seed/` | The pages a fresh memory starts from — copied in if missing, never overwritten |
 | `scripts/install.sh` | Installs the profile, inherits the runtime's model config, registers the jobs |
-| `scripts/register-jobs.sh` | Registers the six scheduled jobs through the cron CLI. Re-runnable |
-| `profile/skills/` | Five skills: judging, review, repair, consolidation, preference update. Retention needs none — it clears bodies and never wakes the agent |
+| `scripts/register-jobs.sh` | Registers the seven scheduled jobs through the cron CLI. Re-runnable |
+| `profile/skills/` | Six skills: judging, review, memory writing, repair, consolidation, preference update. Retention needs none — it clears bodies and never wakes the agent |
 | `fixtures/` | Eight synthetic messages, a seed memory, and one recorded model turn |
 
-Slack is connected through `scripts/setup-slack.sh`; a Microsoft Graph
-connector is still to come. Until a connector is set up, the scheduled jobs
-judge and re-judge whatever the store already holds.
+Slack is connected through `scripts/setup-slack.sh`. Until a connector is set
+up, the scheduled jobs judge and re-judge whatever the store already holds.
 
 ## Requirements
 
@@ -110,7 +111,7 @@ judge and re-judge whatever the store already holds.
 - The fixture path — everything under [Try it](#try-it) and
   [Verify](#verify) — runs on Linux, macOS, or Windows under Windows Subsystem
   for Linux. Every command is written for a POSIX shell.
-- **The scheduled path is Linux only**, including WSL. All five shipped skills
+- **The scheduled path is Linux only**, including WSL. All six shipped skills
   declare `platforms: [linux]`, and Hermes refuses to load a skill outside its
   declared platforms. On macOS the jobs would still fire and the model would
   still be called — with no skill attached and a "skill not found" notice in
@@ -244,7 +245,7 @@ cd ../..
 test "$fail" -eq 0
 ```
 
-Expected result: every file ends with `OK`, the eleven files report 420 tests in
+Expected result: every file ends with `OK`, the twelve files report 505 tests in
 total, and the last line is `failed=0`. Do not use `|| break` here; a `for`
 loop reports the status of its last command, so a failing test would still
 leave the loop exiting `0`.
@@ -260,6 +261,7 @@ leave the loop exiting `0`.
 | Writer behavior, audit trail, caps across batches, correction idempotency, correction state transitions, displaced-row audit | `tests/test_apply_decisions.py` |
 | The walkthrough, and its central claims | `tests/test_walkthrough.py` |
 | Selector output, the wake gate, and the scheduler contract | `tests/test_selectors.py` |
+| What the memory job hands the agent: who is worth a page, stable identity across namesakes and renames, quiet days costing nothing, and corrections counted once | `tests/test_select_memory.py` |
 | Retention, exclusion, export and reset | `tests/test_lifecycle.py` |
 | The Slack collector: watermarks, partial failure, scope probing, thread discovery and rotation, the credential never reaching a stream, and the lifecycle controls applying to what it writes | `tests/test_ingest_slack.py` |
 
@@ -321,23 +323,56 @@ profile afterwards, so a setting that could not be written — or that reports
 success without sticking — ends the run rather than leaving a profile that
 took some of its configuration. The installer then checks both — that a model
 resolves and that a credential is present — and exits before registering any
-job if either is missing, rather than scheduling six jobs that would each
+job if either is missing, rather than scheduling seven jobs that would each
 fail. If your endpoint genuinely needs no key, pass `ALLOW_NO_API_KEY=1` to
 say so.
 
 Re-running it is safe: the registration looks each job up by name and edits it
 rather than adding another copy.
 
-Six jobs are registered:
+Seven jobs are registered:
 
 | Job | Schedule | Pre-step | Skill |
 | --- | --- | --- | --- |
 | intake | every 30 minutes | `select_intake.py` | `inbound-judging` |
 | review | every 6 hours | `select_review.py` | `obligation-review` |
+| memory writing | daily 01:00 | `select_memory.py` | `memory-writing` |
 | retention | daily 02:00 | `retention.py` | — |
 | memory repair | daily 03:00 | — | `memory-repair` |
 | memory consolidation | daily 04:00 | — | `memory-consolidation` |
 | preference update | daily 04:30 | — | `preference-update` |
+
+**Where the memory comes from.** Three of the memory jobs maintain one and
+none of them creates it: repair checks invariants, consolidation compacts
+pages past their ceiling, preference-update writes the policy. The
+memory-writing job is what fills the gap. `select_memory.py` does the
+counting — who has been in touch inside the window, how often, who already has
+a page, which attention pages are past their decay window — and the skill
+decides who is worth a page and what it says. `MEMORY_WINDOW_DAYS` moves the
+window, which matters on a first run against a store that already holds
+months of history.
+
+That job is load-bearing rather than decorative. `ranking.py` reserves `high`
+for work the person has *chosen*, and only `attention/` and `goals/` can
+answer that. With an empty memory nothing reaches the top tier and the
+assistant is left measuring how loudly the outside world is asking, which is
+the thing it exists not to do. Measured on a real mailbox: 952 collected
+messages produced obligations that were all `medium` or `low`, because no page
+could gate one higher.
+
+It writes people and attention pages only, and `schema.md` now carries a
+table saying which page types have a writer at all — `projects/`,
+`patterns/`, `concepts/` and `event_triggers.md` do not yet, and a rule about
+a page nothing creates is a rule about a page somebody would keep by hand.
+Naming that is the point: the schema previously said ingest checked
+`event_triggers.md` against every incoming message, which no shipped job has
+ever done.
+
+`goals/` is the one absence that is a decision. It gates the ranking job's
+top tier alongside `attention/`, so a goal inferred from somebody's inbox
+promotes work they never chose. The job also declines to invent a priority:
+when the evidence supports none it writes the page saying so, because a
+guessed priority produces the same failure by the same route.
 
 **An idle tick costs nothing.** Each of the first two jobs runs its pre-step
 script first, then one agent turn over that script's output. When the script
@@ -381,10 +416,10 @@ declare `cron`. An update replaces what it does declare — `SOUL.md`,
 `schema.md`, `skills`, `scripts` and the manifest — and leaves the jobs and
 their run history alone. This is worth being deliberate about: `profile
 update` lists `cron/` among the directories it overwrites, and it leaves ours
-alone only because the manifest never claims it. Measured, not assumed: six
-jobs registered, `hermes profile update` run on Hermes 0.19.0, six jobs still
-there with the same ids. A test asserts the manifest never claims `cron` or
-`workspace`.
+alone only because the manifest never claims it. Measured, not assumed: seven
+jobs registered, `hermes profile update` run on Hermes 0.19.0, seven jobs
+still there with the same ids. A test asserts the manifest never claims `cron`
+or `workspace`.
 
 To undo, remove the jobs individually. Deleting the profile removes its
 `workspace` too, which is where the store and the memory live; removing the
@@ -426,6 +461,28 @@ recipient lists are never stored. Ingest reduces them to a single `addressing`
 value — `direct`, `mentioned`, or `broadcast` — so the store never holds a
 copy of who else was on a thread. `normalize.py` does this today, and
 `tests/test_normalize.py` asserts it.
+
+One thing the store does keep, and should be said plainly rather than found
+in the schema: **each row carries the sender's stable identity** — their mail
+address, or their Slack user id — in `sender_key`. It is there because a
+display name cannot identify anybody, and a memory page named after one is
+overwritten by the next person who shares it. It is not kept for any other
+purpose: nothing matches on it but the memory job, and it is one column both
+sources agree on rather than a per-source pair. An excluded sender's identity
+is not stored either, because exclusion is applied inside `insert_items` and
+nothing about them is written at all.
+
+**An upgraded store does not get this retroactively.** The value was never
+kept, and it cannot be recovered from a display name — deriving it that way is
+the mistake the field exists to prevent. So rows collected before the upgrade
+carry no identity, and the memory job does not guess at one: it counts them,
+reports the count as `messages_without_identity`, and writes nobody's page
+from them. Two things close the gap. Re-reading a message fills its identity
+in, so a rolling collection window keys the recent past within a window; and
+the job only looks thirty days back, so the gap is gone once the window has
+turned over. What is lost in between is that a person's pre-upgrade messages
+do not count toward whether they are worth a page — not that anything was
+attributed to the wrong person, which is the failure this refuses.
 
 Four controls over what is kept ship alongside it, and they were in place
 before the collector that fills the store was. They apply to real Slack
@@ -632,7 +689,7 @@ package, so nothing is added to the repository's third-party notices.
 Every script except the Slack collector reaches no network. They read the
 recipe's files from the checkout and write application state only inside the
 profile home, and they also leave a Python bytecode cache beside the scripts —
-see [Cleanup](#cleanup). The five skill files a runtime loads add nothing to
+see [Cleanup](#cleanup). The six skill files a runtime loads add nothing to
 that.
 
 The collector reaches exactly one host, `slack.com`, and only for reads. That
@@ -669,7 +726,7 @@ Three separate questions, with three different answers.
 **Do the jobs survive?** Yes. They live in `$HERMES_HOME/cron/jobs.json`, which
 is ordinary disk state — not part of the distribution, so a profile update
 leaves it alone, and not tied to any process, so shutting everything down and
-starting again finds the same six jobs with the same ids.
+starting again finds the same seven jobs with the same ids.
 
 **Do they start firing again on their own?** Only if the gateway was installed
 as a service. `hermes -p <profile> gateway install` registers one — a launchd

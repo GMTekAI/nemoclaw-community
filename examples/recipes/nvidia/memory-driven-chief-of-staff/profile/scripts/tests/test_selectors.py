@@ -296,6 +296,7 @@ class TestTheDocumentedScheduleMatchesTheScript(unittest.TestCase):
     EXPECTED = {
         "intake": ("*/30 * * * *", "inbound-judging"),
         "review": ("0 */6 * * *", "obligation-review"),
+        "memory writing": ("0 1 * * *", "memory-writing"),
         # No skill: retention needs no judgment, clears bodies past the
         # window, and gates the agent off. Naming one would advertise a
         # capability the job never reaches.
