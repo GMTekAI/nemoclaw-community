@@ -27,6 +27,7 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
 import correct  # noqa: E402
+import identity  # noqa: E402
 import normalize  # noqa: E402
 import select_memory  # noqa: E402
 
@@ -83,7 +84,7 @@ class SelectorCase(unittest.TestCase):
         return found
 
     def page(self, slug, updated=None, decay=None, kind="people",
-             last_interaction=None, source_key=None):
+             last_interaction=None, source_key=None, identities=None):
         folder = self.workspace / "memory" / kind
         folder.mkdir(parents=True, exist_ok=True)
         head = ["---"]
@@ -94,7 +95,13 @@ class SelectorCase(unittest.TestCase):
         if last_interaction:
             head.append(f"last_interaction: {last_interaction}")
         if source_key:
+            # The pre-list spelling. Kept in the helper because pages written
+            # by an earlier version still carry it, and reading them is a
+            # promise this code makes.
             head.append(f"source_key: {source_key}")
+        if identities:
+            head.append("identities:")
+            head += [f"  - {who}" for who in identities]
         head += ["---", "", "# page"]
         (folder / f"{slug}.md").write_text("\n".join(head), encoding="utf-8")
 
@@ -133,6 +140,13 @@ class SelectorCase(unittest.TestCase):
         out = buffer.getvalue()
         lines = [line for line in out.splitlines() if line.strip()]
         return out, lines[-1]
+
+    def current_attention(self):
+        today = datetime.now(timezone.utc).date().isoformat()
+        self.page("current_priorities", updated=today, decay="daily",
+                  kind="attention")
+        self.page("active_threads", updated=today, decay="weekly",
+                  kind="attention")
 
     def report(self):
         """The selector's report, parsed.
@@ -334,13 +348,6 @@ class TestACleanInstallIsInitialised(SelectorCase):
 class TestAQuietDayCostsNothing(SelectorCase):
     """The wake gate is what makes an idle tick free, and it was never firing."""
 
-    def current_attention(self):
-        today = datetime.now(timezone.utc).date().isoformat()
-        self.page("current_priorities", updated=today, decay="daily",
-                  kind="attention")
-        self.page("active_threads", updated=today, decay="weekly",
-                  kind="attention")
-
     def test_an_unchanged_correspondent_does_not_wake_the_agent(self):
         """Two messages from last week and a page written since is not work.
         Treating it as work kept the agent awake every half hour for the
@@ -480,13 +487,6 @@ class TestOnlyTheUserSaysWhatTheyChose(SelectorCase):
 
 class TestACorrectionIsEvidenceOnce(SelectorCase):
     """It woke the writer nightly for a month over one thing done once."""
-
-    def current_attention(self):
-        today = datetime.now(timezone.utc).date().isoformat()
-        self.page("current_priorities", updated=today, decay="daily",
-                  kind="attention")
-        self.page("active_threads", updated=today, decay="weekly",
-                  kind="attention")
 
     def applied(self, event_id):
         page = self.workspace / "memory" / "attention" / "current_priorities.md"
@@ -716,16 +716,18 @@ class TestAPersonIsWhoTheyAreNotWhatTheyAreCalled(SelectorCase):
         their display name turned up."""
         page_slug = "sam_ruiz"
         self.page(page_slug, updated="2020-01-01", last_interaction=None,
-                  source_key="sam.ruiz@example.com")
+                  source_key="email:sam.ruiz@example.com")
         for n in range(2):
             self.arrive("Sam Ruiz", "sam.ruiz@example.com", days_ago=n,
                         body=f"a{n}")
             self.arrive("Sam Ruiz", "s.ruiz@other.example", days_ago=n,
                         body=f"b{n}")
         found = self.report()
-        by_key = {p["source_key"]: p["slug"] for p in found["people"]}
-        self.assertEqual(by_key["sam.ruiz@example.com"], page_slug)
-        self.assertTrue(by_key["s.ruiz@other.example"].startswith("sam_ruiz_"))
+        by_key = {who: p["slug"] for p in found["people"]
+                  for who in p["identities"]}
+        self.assertEqual(by_key["email:sam.ruiz@example.com"], page_slug)
+        self.assertTrue(
+            by_key["email:s.ruiz@other.example"].startswith("sam_ruiz_"))
 
     def test_a_page_from_before_the_field_existed_is_not_abandoned(self):
         """Pages written by an earlier version record no identity. The sole
@@ -737,6 +739,176 @@ class TestAPersonIsWhoTheyAreNotWhatTheyAreCalled(SelectorCase):
                         body=f"a{n}")
         found = self.report()
         self.assertEqual([p["slug"] for p in found["people"]], ["dana_okoro"])
+
+
+class TestConfirmingALinkDoesNotStrandAPage(SelectorCase):
+    """The state the feature exists to resolve, and the one it has to survive.
+
+    Before the user answers, each identity has a page of its own — both
+    written, both with history. Confirming the link makes them one person.
+    Returning one slug and saying nothing about the other leaves real content
+    and a real index entry belonging to nobody, while the handoff claims a
+    single page holds everything.
+    """
+
+    def arrive(self, name, address, *, days_ago=0, body="b"):
+        msg = {
+            "id": f"{address}:{days_ago}:{body}",
+            "receivedDateTime": iso(days_ago),
+            "from": {"emailAddress": {"name": name, "address": address}},
+            "toRecipients": [{"emailAddress": {"address": "user@example.com"}}],
+            "subject": body, "bodyPreview": body, "isRead": False,
+        }
+        with sqlite3.connect(self.db) as conn:
+            normalize.insert_items(
+                conn, [normalize.graph_message_to_item(msg, "user@example.com")])
+
+    def slack(self, name, uid, *, days_ago=0, body="b", handle=None):
+        with sqlite3.connect(self.db) as conn:
+            normalize.insert_items(conn, [normalize.slack_message_to_item(
+                {"ts": f"{1787000000 + days_ago}.000{len(body)}",
+                 "user": uid, "text": body},
+                {"id": "D01", "is_im": True}, "U0ME", name, handle)])
+
+    def link(self, *identities):
+        with sqlite3.connect(self.db) as conn:
+            for a, b in ((identities[i], identities[j])
+                         for i in range(len(identities))
+                         for j in range(i + 1, len(identities))):
+                identity.record(conn, identity.parse(a), identity.parse(b),
+                                "confirmed")
+            conn.commit()
+
+    def two_written_pages(self):
+        """A store where the agent has already written both halves up."""
+        for n in range(2):
+            self.arrive("Dana Okoro", "dana@example.com", days_ago=n,
+                        body=f"mail{n}")
+            self.slack("Dana Okoro", "U01DANA", days_ago=n, body=f"slack{n}",
+                       handle="dana")
+        self.page("dana_by_mail", updated="2026-08-01",
+                  identities=["email:dana@example.com"])
+        self.page("dana_by_slack", updated="2026-08-01",
+                  identities=["slack:U01DANA"])
+
+    def test_both_pages_are_handed_over_not_just_the_first(self):
+        self.two_written_pages()
+        self.link("email:dana@example.com", "slack:U01DANA")
+        found = self.report()
+        self.assertEqual(len(found["people"]), 1, found["people"])
+        person = found["people"][0]
+        self.assertEqual(
+            sorted([person["slug"]] + person["merge_into_slug"]),
+            ["dana_by_mail", "dana_by_slack"],
+            "a page this person owns was dropped from the handoff")
+
+    def test_the_page_that_is_kept_does_not_change_between_runs(self):
+        """A keep-choice that depends on identity order would move content
+        back and forth and lose some of it each way."""
+        self.two_written_pages()
+        self.link("email:dana@example.com", "slack:U01DANA")
+        first = self.report()["people"][0]["slug"]
+        for _ in range(3):
+            self.assertEqual(self.report()["people"][0]["slug"], first)
+
+    def test_the_kept_page_is_offered_with_the_whole_history(self):
+        """One page, and the interactions under it are both halves — which is
+        what makes the merge worth doing rather than a bookkeeping move."""
+        self.two_written_pages()
+        self.link("email:dana@example.com", "slack:U01DANA")
+        found = self.report()
+        person = found["people"][0]
+        self.assertEqual(person["messages"], 4)
+        texts = {line["text"] for line in found["interactions"][person["slug"]]}
+        self.assertTrue(any(x.startswith("mail") for x in texts), texts)
+        self.assertTrue(any(x.startswith("slack") for x in texts), texts)
+
+    def test_a_pending_merge_is_work_when_both_pages_are_current(self):
+        """The case the freshness rule was built to skip, and the one case it
+        must not.
+
+        That rule asks whether a message has arrived which the page does not
+        account for. A pending merge answers no — both pages are current,
+        which is exactly when the split can sit there forever, because no new
+        message is required for it to still be true. Skipped here, the person
+        stays split indefinitely and nothing ever says so.
+        """
+        self.current_attention()
+        today = datetime.now(timezone.utc).date().isoformat()
+        self.two_written_pages()
+        # Both pages record the newest interaction there is.
+        self.page("dana_by_mail", updated=today, last_interaction=today,
+                  identities=["email:dana@example.com"])
+        self.page("dana_by_slack", updated=today, last_interaction=today,
+                  identities=["slack:U01DANA"])
+        self.link("email:dana@example.com", "slack:U01DANA")
+
+        found = self.report()
+        self.assertEqual(len(found["people"]), 1,
+                         "a person with a page still to merge was skipped as"
+                         " quiet")
+        self.assertEqual(len(found["people"][0]["merge_into_slug"]), 1)
+
+    def test_the_gate_wakes_for_a_pending_merge_and_nothing_else(self):
+        """Every other input current — attention pages fresh, no corrections,
+        no message since either page was written — and the merge alone has to
+        be enough. If the gate sleeps, nothing else in the schedule reports
+        the split."""
+        self.current_attention()
+        today = datetime.now(timezone.utc).date().isoformat()
+        self.two_written_pages()
+        self.page("dana_by_mail", updated=today, last_interaction=today,
+                  identities=["email:dana@example.com"])
+        self.page("dana_by_slack", updated=today, last_interaction=today,
+                  identities=["slack:U01DANA"])
+        self.link("email:dana@example.com", "slack:U01DANA")
+
+        out, last = self.run_selector()
+        self.assertNotIn("wakeAgent", out,
+                         "the job slept on a merge nothing else will do")
+
+    def test_a_quiet_person_with_nothing_to_merge_still_costs_nothing(self):
+        """The exemption is for pending merges, not a way around the rule."""
+        self.current_attention()
+        today = datetime.now(timezone.utc).date().isoformat()
+        for n in range(2):
+            self.arrive("Dana Okoro", "dana@example.com", days_ago=n + 5,
+                        body=f"mail{n}")
+        self.page("dana_okoro", updated=today, last_interaction=today,
+                  identities=["email:dana@example.com"])
+        _, last = self.run_selector()
+        self.assertEqual(json.loads(last), {"wakeAgent": False})
+
+    def test_a_person_with_one_page_has_nothing_to_merge(self):
+        """The field is present and empty rather than absent, so a reader
+        does not have to tell "no extras" from "not reported"."""
+        for n in range(2):
+            self.arrive("Dana Okoro", "dana@example.com", days_ago=n,
+                        body=f"mail{n}")
+        self.page("dana_okoro", updated="2026-08-01",
+                  identities=["email:dana@example.com"])
+        self.assertEqual(self.report()["people"][0]["merge_into_slug"], [])
+
+    def test_three_pages_for_one_person_are_all_reported(self):
+        """Nothing here counts to two: a third connector joins the same way,
+        and its page has to be named too."""
+        for n in range(2):
+            self.arrive("Dana Okoro", "dana@example.com", days_ago=n,
+                        body=f"mail{n}")
+            self.slack("Dana Okoro", "U01DANA", days_ago=n, body=f"slack{n}")
+        self.add("Dana Okoro", days_ago=0, source="slack", body="third",
+                 key="U09OTHER")
+        self.add("Dana Okoro", days_ago=1, source="slack", body="third2",
+                 key="U09OTHER")
+        for mark, who in (("dana_by_mail", "email:dana@example.com"),
+                          ("dana_by_slack", "slack:U01DANA"),
+                          ("dana_by_other", "slack:U09OTHER")):
+            self.page(mark, updated="2026-08-01", identities=[who])
+        self.link("email:dana@example.com", "slack:U01DANA", "slack:U09OTHER")
+        person = self.report()["people"][0]
+        self.assertEqual(
+            sorted([person["slug"]] + person["merge_into_slug"]),
+            ["dana_by_mail", "dana_by_other", "dana_by_slack"])
 
 
 class TestUpgradingDoesNotSplitAPerson(SelectorCase):
@@ -783,7 +955,8 @@ class TestUpgradingDoesNotSplitAPerson(SelectorCase):
                         body=f"new{n}")
         found = self.report()
         self.assertEqual(len(found["people"]), 1, found["people"])
-        self.assertEqual(found["people"][0]["source_key"], "dana@example.com")
+        self.assertEqual(found["people"][0]["identities"],
+                         ["email:dana@example.com"])
 
     def test_rows_with_no_identity_are_counted_rather_than_guessed(self):
         for n in range(2):
