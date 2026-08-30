@@ -17,17 +17,17 @@ across two synthetic corpora.
 - [What Is In The Corpora](#what-is-in-the-corpora)
 - [What It Asks](#what-it-asks)
 - [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Adding Your System](#adding-your-system)
-- [How The Runner Treats Your Adapter](#how-the-runner-treats-your-adapter)
 - [Reading A Result](#reading-a-result)
 - [Published Results](#published-results)
-- [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
 - [Cleanup](#cleanup)
+- [For Contributors](#for-contributors)
+  - [Project Structure](#project-structure)
+  - [Configuration](#configuration)
+  - [Adding Your System](#adding-your-system)
+  - [How The Runner Treats Your Adapter](#how-the-runner-treats-your-adapter)
+  - [Verification](#verification)
 - [Provenance And License](#provenance-and-license)
-- [Metadata](#metadata)
 
 ---
 
@@ -35,30 +35,11 @@ across two synthetic corpora.
 
 ![Terminal session: the offline self-test scoring exactly 1.0 on every question type, followed by the test suite passing](docs/assets/offline-self-test.png)
 
-The offline oracle scores `1.0` on a six-document fixture. The text version
-below keeps the result searchable and agent-readable.
-
-```text
-$ python3 -m bench.runner --adapter selftest/oracle \
-      --corpus selftest/corpus --questions selftest/questions.jsonl \
-      --gold selftest/gold.jsonl
-
-* corpus: 6 docs (4 part_a / 2 part_b)
-* questions: 6 (graded deterministically: 6, deferred to judge: 0)
-
-## Quality
-* accuracy overall: **1.0**
-  * [base] 1.0
-  * [hard] 1.0
-  * abstention: 1.0
-  * citation: 1.0
-  * freshness: 1.0
-  * multi_source: 1.0
-  * ordering: 1.0
-  * single_hop: 1.0
-  * freshness with a competing stale claim in corpus: 1.0
-  * freshness recency-only: n/a — not annotated for this corpus
-```
+The offline oracle scores `1.0` on a six-document fixture, then the suite
+passes. Searchable form of the result: `accuracy overall: 1.0`, every
+question type at `1.0`, and `deferred to judge: 0`. Note that `freshness`
+splits into two lines — a system must not only be current, it must resist a
+stale value still sitting in the corpus.
 
 ---
 
@@ -128,9 +109,18 @@ does not say" is scored right.
 
 ## Getting Started
 
-Use Python 3.9+ on macOS or Linux and install `pytest`. A real run also needs an
-API key for the configured endpoint. The shipped adapters invoke `python3`,
-which a default Windows installation does not provide.
+Use Python 3.9+ on macOS or Linux, and install `pytest` and `tesseract`; the
+harness itself imports only the standard library. `tesseract` is required by two
+tests that read the README image and check it shows the run the suite verifies —
+without it those two fail rather than skip, because a check a machine might not
+run is not a check. A real run also needs an API key for the
+configured endpoint. The shipped adapters invoke `python3`, which a default
+Windows installation does not provide.
+
+The entry point is `python3 -m bench.runner` and the offline check is
+`python3 -m pytest tests/`. Corpus A is the default; `corpus_b/` holds the
+second corpus, and [`docs/SUBMITTING.md`](docs/SUBMITTING.md) is the adapter
+contract.
 
 ### 1. Check it works — offline, free, no API key
 
@@ -139,7 +129,8 @@ which a default Windows installation does not provide.
 ```bash
 cd examples/tools/agent-memory-benchmark
 python3 -m pip install pytest
-python3 -m pytest tests/     # expected: 219 passed
+brew install tesseract        # macOS; on Linux: apt-get install tesseract-ocr
+python3 -m pytest tests/      # expected: 234 passed
 ```
 
 Then run the whole pipeline against a fixture whose score is known in advance:
@@ -184,7 +175,74 @@ The runner ingests both corpus halves in order, feeds
 
 ---
 
-## Project Structure
+## Reading A Result
+
+Compare per-question-type accuracy, not only the overall average. Freshness
+separates cases with and without a competing stale claim. Evidence recall and
+citation coverage remain diagnostics rather than accuracy inputs.
+
+Why the two axes are never combined, and what deterministic grading cannot
+express: [`docs/methodology.md`](docs/methodology.md).
+
+Two reports are comparable only when their `fingerprint` blocks match — same
+corpus, same questions, same answer key, same normalization, same scorer.
+
+---
+
+## Published Results
+
+The repository includes one self-model run and one agentic retrieval run on
+corpus A with the same base model and grader. The artifacts show their scores
+and separate ingest and answer costs, but do not include the self-model's memory
+or enough accounting evidence for a cost ratio.
+
+Read [`results/README.md`](results/README.md) **before** the table there. Those
+runs are corpus A only, on one base model; their answers predate a rename at
+publication; and their accounting cannot support a cost comparison. All four
+limits are stated where the numbers are.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `No module named pytest` | `pytest` is a dev dependency and is not vendored. | `python3 -m pip install pytest` |
+| Two image tests fail with *tesseract is required* | The README image is verified by reading it, so the tool is required rather than optional. | `brew install tesseract`, or `apt-get install tesseract-ocr` |
+| `No module named 'bench'` | `python3 -m bench.runner` was run from a different directory; `-m` resolves the package from the current one. | `cd examples/tools/agent-memory-benchmark` and re-run. |
+| Adapter command not found on Windows | The shipped adapters invoke `python3`, which a default Windows install does not provide. | Run on macOS or Linux, or under WSL. |
+| Run marked invalid: *declared proxy, nothing crossed it* | The adapter bypassed the proxy, or it runs a locally-hosted model. | Point the client at `OPENAI_BASE_URL`, or declare `"accounting": "local"`. |
+| Run marked invalid: *forwarded request without countable usage* | The upstream returned no usage block. | Use a gateway that returns usage; a cost nobody measured must not read as zero. |
+| Run marked invalid: *declared local but N requests crossed the proxy* | The adapter says it runs locally but its client still points at `OPENAI_BASE_URL`. | Stop routing through the proxy, or declare `"accounting": "proxy"`. |
+| Run marked invalid: *N of M questions received no answer* | One or more answer rows are missing, blank or non-string. An incomplete submission is not a lower score. | Emit one row per question; to decline, say so in the answer rather than leaving it empty. |
+| USD is `null` in the report | `bench/pricing.py` has no entry for that model. | Expected. Token counts are still exact; the harness will not invent a price. |
+| Two reports refuse to be compared | Their `fingerprint` blocks differ — corpus, questions, key, normalization or scorer moved. | Re-score the stored answers: `python3 tools/regrade.py --run results/runs/<dir>` |
+| A phase hangs, then dies at six hours | The per-phase wall-clock budget. | Raise `MNEMO_TIMEOUT_SECONDS`, or set `0` to wait indefinitely. |
+| `results/` grew by hundreds of megabytes | Each run keeps whatever memory the system under test built. | Delete the run directory; see [Cleanup](#cleanup). |
+
+---
+
+## Cleanup
+
+Each run writes reports, verdicts, answers, and adapter state under
+`results/runs/<timestamp>-<adapter>/`. Delete that directory to reclaim space.
+
+By default nothing outside that directory is modified by the harness. `--out`
+and `--state` will write wherever you point them, and an adapter is not
+sandboxed, so one you add can write elsewhere; see
+[How the runner treats your adapter](#how-the-runner-treats-your-adapter).
+
+A generated run is ignored by Git. Publishing one requires an explicit
+`.gitignore` exception.
+
+---
+
+## For Contributors
+
+Everything below is for someone adding a system, changing the harness, or
+verifying a claim. A reader who only wants to run the benchmark can stop here.
+
+### Project Structure
 
 ```text
 agent-memory-benchmark/
@@ -226,14 +284,16 @@ agent-memory-benchmark/
 
 **Dependency files:** there are none to install for the harness — `bench/`
 imports only the Python standard library. The offline check needs `pytest`
-(`python3 -m pip install pytest`). An adapter for a third-party system declares
+(`python3 -m pip install pytest`) and `tesseract` (`brew install tesseract`, or
+`apt-get install tesseract-ocr`), the latter for the two tests that read the
+README image. An adapter for a third-party system declares
 its own requirements separately, inside its own directory.
 
 ---
 
-## Configuration
+### Configuration
 
-### `adapter.json` — the contract for a system under test
+#### `adapter.json` — the contract for a system under test
 
 Every adapter is one JSON file. `name`, `ingest` and `answer` are required —
 omitting any of them is an uncaught `KeyError`, not a default. `model` is
@@ -291,7 +351,7 @@ interface AdapterConfig {
 > A `local` run that really is local stays valid, and stays out of cost
 > comparisons. Only a fully counted run carries `comparable_on_cost: true`.
 
-### Environment variables
+#### Environment variables
 
 | Variable | Default | What it does |
 | --- | --- | --- |
@@ -326,7 +386,7 @@ MY_SYSTEM_PYTHON=~/src/my-system/.venv/bin/python \
 
 ---
 
-## Adding Your System
+### Adding Your System
 
 1. Write an `adapter.json` as above.
 2. `answer` reads `questions.jsonl` on **stdin** and writes one JSON object per
@@ -357,7 +417,7 @@ interface AnswerRow {
 
 ---
 
-## How The Runner Treats Your Adapter
+### How The Runner Treats Your Adapter
 
 > **Adapters are not sandboxed.** They run with your user, filesystem access,
 > and environment credentials. Review an adapter before running it.
@@ -385,85 +445,24 @@ The guards provide:
 
 ---
 
-## Reading A Result
-
-Compare per-question-type accuracy, not only the overall average. Freshness
-separates cases with and without a competing stale claim. Evidence recall and
-citation coverage remain diagnostics rather than accuracy inputs.
-
-Why the two axes are never combined, and what deterministic grading cannot
-express: [`docs/methodology.md`](docs/methodology.md).
-
-Two reports are comparable only when their `fingerprint` blocks match — same
-corpus, same questions, same answer key, same normalization, same scorer.
-
----
-
-## Published Results
-
-The repository includes one self-model run and one agentic retrieval run on
-corpus A with the same base model and grader. The artifacts show their scores
-and separate ingest and answer costs, but do not include the self-model's memory
-or enough accounting evidence for a cost ratio.
-
-Read [`results/README.md`](results/README.md) **before** the table there. Those
-runs are corpus A only, on one base model; their answers predate a rename at
-publication; and their accounting cannot support a cost comparison. All four
-limits are stated where the numbers are.
-
----
-
-## Verification
+### Verification
 
 **Evidence level:** `local/static`. **Verified on** Python 3.9.6, macOS. Nothing
 here exercises a live endpoint.
 
 ```bash
-python3 -m pytest tests/     # expected: 219 passed
+python3 -m pytest tests/     # expected: 234 passed
 ```
 
 **Expected result:**
 
 ```text
-219 passed
+234 passed
 ```
 
 This verifies the runner, grader, report renderer, ledger ingest, fixtures, and
 documented corpus counts. It does not test a live endpoint, real model call, or
 Windows.
-
----
-
-## Troubleshooting
-
-| Symptom | Cause | Fix |
-| --- | --- | --- |
-| `No module named pytest` | `pytest` is a dev dependency and is not vendored. | `python3 -m pip install pytest` |
-| `No module named 'bench'` | `python3 -m bench.runner` was run from a different directory; `-m` resolves the package from the current one. | `cd examples/tools/agent-memory-benchmark` and re-run. |
-| Adapter command not found on Windows | The shipped adapters invoke `python3`, which a default Windows install does not provide. | Run on macOS or Linux, or under WSL. |
-| Run marked invalid: *declared proxy, nothing crossed it* | The adapter bypassed the proxy, or it runs a locally-hosted model. | Point the client at `OPENAI_BASE_URL`, or declare `"accounting": "local"`. |
-| Run marked invalid: *forwarded request without countable usage* | The upstream returned no usage block. | Use a gateway that returns usage; a cost nobody measured must not read as zero. |
-| Run marked invalid: *declared local but N requests crossed the proxy* | The adapter says it runs locally but its client still points at `OPENAI_BASE_URL`. | Stop routing through the proxy, or declare `"accounting": "proxy"`. |
-| Run marked invalid: *N of M questions received no answer* | One or more answer rows are missing, blank or non-string. An incomplete submission is not a lower score. | Emit one row per question; to decline, say so in the answer rather than leaving it empty. |
-| USD is `null` in the report | `bench/pricing.py` has no entry for that model. | Expected. Token counts are still exact; the harness will not invent a price. |
-| Two reports refuse to be compared | Their `fingerprint` blocks differ — corpus, questions, key, normalization or scorer moved. | Re-score the stored answers: `python3 tools/regrade.py --run results/runs/<dir>` |
-| A phase hangs, then dies at six hours | The per-phase wall-clock budget. | Raise `MNEMO_TIMEOUT_SECONDS`, or set `0` to wait indefinitely. |
-| `results/` grew by hundreds of megabytes | Each run keeps whatever memory the system under test built. | Delete the run directory; see [Cleanup](#cleanup). |
-
----
-
-## Cleanup
-
-Each run writes reports, verdicts, answers, and adapter state under
-`results/runs/<timestamp>-<adapter>/`. Delete that directory to reclaim space.
-
-By default nothing outside that directory is modified by the harness. `--out`
-and `--state` will write wherever you point them, and an adapter is not
-sandboxed, so one you add can write elsewhere; see
-[How the runner treats your adapter](#how-the-runner-treats-your-adapter).
-
-A generated run is ignored by Git. Publishing one requires an explicit
-`.gitignore` exception.
 
 ---
 
@@ -483,30 +482,10 @@ alike, under the repository's [LICENSE](../../../LICENSE).
 
 ---
 
-## Metadata
-
-```yaml
-name: agent-memory-benchmark
-display_name: mnemo — Agent Memory Benchmark
-category: Developer Tool
-provenance: NVIDIA
-language: python
-python_requires: ">=3.9"
-runtime_dependencies: none (Python standard library only)
-dev_dependencies: [pytest]
-entry_point: python3 -m bench.runner
-offline_check: python3 -m pytest tests/
-adapter_contract: docs/SUBMITTING.md
-corpora: [corpus_a/, corpus_b/]
-question_count: 186  # corpus A; corpus B adds 96, see corpus_b/README.md
-license: Apache-2.0
-evidence_level: local/static
-```
-
 ## Catalog Metadata
 
 | Catalog field | Value |
 | --- | --- |
 | Description | Measures memory built from synthetic email and chat, asks 186 questions on one corpus and 96 on a second, and reports accuracy by question type with ingest and answer token costs. |
 | Industry | ✨ Other |
-| Requirements | Python 3.9+ · pytest for offline checks · endpoint and adapter for live scoring |
+| Requirements | Python 3.9+ · pytest and tesseract for offline checks · endpoint and adapter for live scoring |

@@ -169,23 +169,3 @@ two scores are comparable: [`../docs/provenance.md`](../docs/provenance.md).
   [`../corpus_b/`](../corpus_b/README.md) exists.
 - **Edited for publication.** Corpus B used a different key-first procedure and
   documents its own unresolved defects.
-
----
-
-## Metadata
-
-```yaml
-name: agent-memory-benchmark-corpus-a
-display_name: Corpus A — software platform engineering
-parent: ../README.md
-location_note: kept outside corpus_a/corpus/ because every file under the corpus root is hashed into the corpus fingerprint
-documents: 425
-emails: 200
-chat_documents: 225
-chat_messages: 559
-period: 2026-04-16 .. 2026-05-27
-split_after: 2026-05-11
-questions: 186
-synthetic: true
-license: Apache-2.0
-```

@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 import html
 import re
+import shutil
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
@@ -138,3 +140,113 @@ def test_the_screenshot_shows_what_the_self_test_actually_prints(tmp_path):
         assert line in printed, (
             f"the screenshot claims {line!r}, which the self-test does not print. "
             f"Re-render docs/assets/offline-self-test.svg from a real run.")
+
+
+def test_the_readme_raster_was_exported_from_the_svg_that_is_checked():
+    """The raster must record the digest of the SVG it came from.
+
+    `scripts/build_catalog.py` allows only raster formats in a README, so the
+    image on the page cannot be the SVG the drift check reads. Two earlier
+    versions of this test were unsound: one asserted only that both files
+    existed, and passed while the raster showed a test count nearly a hundred
+    behind; the next compared modification times, which git does not preserve --
+    a fresh checkout stamps both files at checkout time, so a stale raster
+    committed beside a newer SVG would pass.
+
+    `tools/export_selftest_image.py` writes the SVG's SHA-256 into a PNG `tEXt`
+    chunk. The record travels with the file, so this comparison is deterministic
+    in any checkout and needs neither OCR nor timestamps.
+    """
+    sys.path.insert(0, str(REPO))
+    from tools.export_selftest_image import PNG, SVG, read_stamp, source_digest
+
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    shown = re.findall(r"!\[[^\]]*\]\((docs/assets/[^)]+)\)", readme)
+    assert shown, "the README no longer shows the offline self-test image"
+    assert SVG.exists(), (
+        "the README shows an exported image and the SVG it came from is gone, "
+        "so nothing checks that the picture matches a real run")
+
+    for reference in shown:
+        raster = REPO / reference
+        assert raster.exists(), f"the README shows {reference}, which is missing"
+        if raster.suffix == ".svg":
+            continue
+        assert raster == PNG, (
+            f"{reference} is shown but is not the file the export tool writes; "
+            f"teach tools/export_selftest_image.py about it or point the README "
+            f"back at {PNG.name}")
+        recorded = read_stamp(raster)
+        assert recorded is not None, (
+            f"{reference} records no source digest. Re-export it with "
+            f"`python3 tools/export_selftest_image.py` so the picture a reader "
+            f"sees can be tied to the run this suite checks.")
+        assert recorded == source_digest(), (
+            f"{reference} was exported from a different {SVG.name} "
+            f"(records {recorded[:12]}…, the file here is {source_digest()[:12]}…). "
+            f"Re-export it with `python3 tools/export_selftest_image.py`.")
+
+
+def test_the_readme_raster_shows_what_the_svg_states():
+    """Read the picture and require the test count the SVG states.
+
+    Not optional, and not a fallback. A digest records what an exporter claimed;
+    only reading the image proves the pixels were re-rendered. While this check
+    skipped without `tesseract`, a digest could be attached to stale pixels and
+    every check that ran still passed -- so the guard that mattered was the one
+    a machine might not run.
+    """
+    assert shutil.which("tesseract") is not None, (
+        "tesseract is required to verify that docs/assets/offline-self-test.png "
+        "shows the run the suite checks. Install it (`brew install tesseract`, "
+        "`apt-get install tesseract-ocr`) and re-run.")
+    sys.path.insert(0, str(REPO))
+    from tools.export_selftest_image import PNG, SVG
+
+    numbers = set(re.findall(r"(\d{2,4}) passed", SVG.read_text(encoding="utf-8")))
+    assert numbers, "the SVG no longer states a test count"
+    with tempfile.TemporaryDirectory() as work:
+        stem = Path(work) / "ocr"
+        subprocess.run(["tesseract", str(PNG), str(stem), "--psm", "6"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        read = stem.with_suffix(".txt").read_text(encoding="utf-8", errors="ignore")
+    assert any(f"{n} passed" in read for n in numbers), (
+        f"{PNG.name} does not show the test count the SVG states ({sorted(numbers)}); "
+        f"re-export it with `python3 tools/export_selftest_image.py`.")
+
+
+def test_a_digest_cannot_vouch_for_pixels_that_were_not_rendered():
+    """Stamping stale content must not produce an image the guards accept.
+
+    This is the hole the stamp-only entry point opened: change the SVG, strip
+    the old chunk, attach the new digest, and the digest check passes over
+    pixels nobody re-rendered. The tool no longer offers that path, and reading
+    the image catches it even if something else attaches a stamp.
+    """
+    sys.path.insert(0, str(REPO))
+    import tools.export_selftest_image as exporter
+
+    assert not hasattr(exporter, "stamp"), (
+        "a stamp-in-place entry point is back; a digest must only be attached to "
+        "bytes that were just rendered")
+
+    original_svg = exporter.SVG.read_bytes()
+    original_png = exporter.PNG.read_bytes()
+    try:
+        exporter.SVG.write_bytes(original_svg.replace(b"passed", b"pxssed"))
+        forged = exporter._stamped(original_png, exporter.source_digest())
+        exporter.PNG.write_bytes(forged)
+        assert exporter.read_stamp() == exporter.source_digest(), (
+            "the forgery did not take; this test would prove nothing")
+        with tempfile.TemporaryDirectory() as work:
+            stem = Path(work) / "ocr"
+            if shutil.which("tesseract") is None:
+                pytest.fail("tesseract is required; see the test above")
+            subprocess.run(["tesseract", str(exporter.PNG), str(stem), "--psm", "6"],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+            read = stem.with_suffix(".txt").read_text(encoding="utf-8", errors="ignore")
+        assert "pxssed" not in read, (
+            "the stale raster passed a content check it should have failed")
+    finally:
+        exporter.SVG.write_bytes(original_svg)
+        exporter.PNG.write_bytes(original_png)

@@ -39,6 +39,15 @@ ABSTAIN_MARKERS = (
     "did not happen", "no record of", "nothing in the raw", "does not state",
     "doesn't state", "does not say", "doesn't say", "corpus only shows",
     "only reserved", "no opened", "never opened", "not reviewed",
+    # An event placed in the future has not happened, which is what an
+    # abstention question about it is asking. The list already carried the past
+    # forms -- "only planned", "has not happened" -- but not the present ones a
+    # system actually writes. The forbidden-claim check runs before this, so an
+    # answer that asserts the event went well cannot reach it by adding "was
+    # planned for" afterwards.
+    "is planned", "are planned", "planned for", "is scheduled", "are scheduled",
+    "scheduled for", "has yet to", "have yet to", "yet to be", "not taken place",
+    "is upcoming", "target date", "is targeted for",
 )
 
 YES_MARKERS = ("yes", "correct", "true", "that is right", "same person", "one person", "identical")
@@ -140,6 +149,15 @@ DENIAL_CUES = (
     "is not", "are not", "was not", "were not", "isn't", "aren't", "wasn't",
     "weren't", "no longer", "rather than", "instead of", "not ", "never ",
     "cannot", "can't", "don't", "doesn't", "didn't", "no evidence", "not the",
+    # Saying the corpus is silent is a denial of everything the sentence goes on
+    # to name. A correct abstention that read "there is no information about
+    # whether it completed successfully" was scored as asserting the phrase it
+    # was declining to assert. A bare "no" is too broad to be a cue; these are
+    # the shapes an abstention actually takes.
+    # The silence constructions are matched by SILENCE_PATTERNS instead of being
+    # listed here. Their bare forms are too broad: "there is no information gap
+    # and the figure is 50%" is not a refusal, and reading it as one denied a
+    # value that sentence asserts.
     # A denial can follow the value instead of preceding it. Anchoring these on
     # the copula keeps "is wrong" from matching a noun like "the wrong-way
     # valve", which asserts nothing.
@@ -265,6 +283,25 @@ def _clauses(answer: str) -> list[tuple[str, bool]]:
     return out
 
 
+# A claim that the source is silent, as opposed to a sentence that merely
+# contains "no data". The absence word must be followed by something saying
+# *what* is missing -- a preposition introducing the subject, a complement
+# clause, or a verb taken by "nothing in the corpus". Without that, "there is no
+# information gap and the figure is 50%" reads as a refusal and denies a value
+# the sentence asserts.
+_SILENCE = (
+    r"no (?:information|mention|record|indication|detail|data|evidence|reference)"
+    r"(?:\s+(?:in|from|within)\s+(?:the\s+)?\w+){0,2}"
+    r"\s+(?:about|on|regarding|as to|of|for|whether|that)\b",
+    r"nothing (?:in|within) the (?:corpus|record|documents)\b",
+    r"(?:does|do|did|could|can)\s+not\s+(?:say|state|mention|indicate|record|specify)\b",
+    r"(?:is|are|was|were)\s+not\s+(?:stated|mentioned|recorded|specified|documented)\b",
+    r"not in the corpus\b",
+    r"silent on\b",
+)
+SILENCE_PATTERNS: tuple = tuple(re.compile(p) for p in _SILENCE)
+
+
 # Substring matching found "is wrong" inside "th|is wrong| estimate", so a
 # correction was read as a denial. The comment claimed the copula anchored these
 # cues; only a boundary does. Both places that ask "is there a denial here" go
@@ -279,6 +316,10 @@ def _denial_cue(text: str) -> str | None:
     for cue, pattern in _CUE_PATTERNS:
         if pattern.search(lowered):
             return cue
+    for pattern in SILENCE_PATTERNS:
+        found = pattern.search(lowered)
+        if found:
+            return found.group(0)
     return None
 
 
@@ -383,6 +424,11 @@ def _grade_abstain(answer: str, gold: dict) -> tuple[bool, str]:
         return False, f"asserted content the corpus does not support: {fabricated!r}"
     if _is_abstention(answer):
         return True, "correctly declined to assert"
+    # Distinguish the two ways an abstention item can be failed, because they are
+    # not the same behaviour and a reader of the verdicts should not have to
+    # guess which one happened. Fabrication is caught above, by the forbidden
+    # claim; what is left here is an answer that stayed inside the corpus but
+    # never signalled the gap.
     # Some questions are answerable by rejecting their premise instead of
     # declining ("ReviewBot is an automated sender, not a colleague"). These
     # markers are NOT a correct answer to the question as asked — an abstention
@@ -392,7 +438,9 @@ def _grade_abstain(answer: str, gold: dict) -> tuple[bool, str]:
         return True, f"rejected the question's premise ({premise!r})"
     if _denies_occurrence(answer):
         return True, "stated the thing has not happened, and asserted no outcome"
-    return False, "answered as if the fact were known (no abstention marker)"
+    return False, (
+        "answered from the corpus without signalling that it cannot support the "
+        "question")
 
 
 def _grade_ordering(answer: str, gold: dict) -> tuple[bool, str]:

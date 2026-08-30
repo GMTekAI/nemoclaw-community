@@ -40,13 +40,13 @@ adapter contract. Ingest and per-question costs remain separate.
 
 | Metric | Agentic RAG | Self-model | Difference |
 | --- | ---: | ---: | ---: |
-| Overall accuracy (186 questions) | 82.8% | 89.8% | +7.0 pp |
+| Overall accuracy (186 questions) | 82.8% | 90.9% | +8.1 pp |
 | Hard questions (31) | 67.7% | 87.1% | +19.4 pp |
 | Tracking facts that changed over time — `chain_freshness` (5) | 60.0% | 100.0% | +40.0 pp |
 | Point-in-time reasoning — `as_of` (6) | 33.3% | 66.7% | +33.3 pp |
 | Entity disambiguation — `disambiguation` (15) | 66.7% | 86.7% | +20.0 pp |
 | Multi-source synthesis — `multi_source` (73) | 87.7% | 94.5% | +6.8 pp |
-| Refusing to answer when the corpus cannot — `abstention` (13) | 100.0% | 76.9% | -23.1 pp |
+| Answered faithfully based on Corpus — `abstention` (13) | 100.0% | 92.3% | -7.7 pp |
 | Single-hop lookup — `single_hop` (30) | 86.7% | 83.3% | -3.3 pp |
 | Citation coverage (186) | 92.5% | 97.8% | +5.4 pp |
 
@@ -114,8 +114,8 @@ What it changed, measured:
 
 | | Agentic RAG | Self-model |
 | --- | ---: | ---: |
-| As answered, against the published key | 80.1% | 87.1% |
-| After the substitution | 82.8% | 89.8% |
+| As answered, against the published key | 80.1% | 87.6% |
+| After the substitution | 82.8% | 90.9% |
 | Answers reported unanswered before the id map | 4 | 4 |
 
 Without the four question-ID mappings, four answers appear absent and invalidate
@@ -154,20 +154,3 @@ of these were graded at the fingerprint the repository carries today.
 
 > Generated runs are ignored by default. The two directories above are explicit
 > published exceptions.
-
----
-
-## Metadata
-
-```yaml
-name: agent-memory-benchmark-results
-display_name: Reference Results
-parent: ../README.md
-corpus: corpus A only
-base_models: 1
-runs: [agentic-rag_corpus-a_nemotron, self-model_corpus-a_nemotron]
-questions: 186
-reproducible_as_is: false
-cost_comparable: false
-license: Apache-2.0
-```
