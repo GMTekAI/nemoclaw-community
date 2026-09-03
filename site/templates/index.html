@@ -13,7 +13,8 @@
     >
     <title>NemoClaw Community Example Catalog | NVIDIA</title>
     <link rel="icon" type="image/png" sizes="64x64" href="assets/nvidia-favicon.png">
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles/shared.css">
+    <link rel="stylesheet" href="styles/catalog.css">
   </head>
   <body>
     <a class="skip-link" href="#catalog">Skip to examples</a>
@@ -69,6 +70,9 @@
                   href="https://github.com/NVIDIA/nemoclaw-community/blob/main/CONTRIBUTING.md#add-a-new-example"
                 >
                   Contribute an example
+                </a>
+                <a class="button button-tertiary" href="{{TUTORIAL_URL}}">
+                  Getting Started <span aria-hidden="true">→</span>
                 </a>
               </nav>
             </div>
@@ -238,6 +242,7 @@
           agreement says otherwise.
         </p>
         <nav class="footer-links" aria-label="Repository policies and resources">
+          <a href="{{TUTORIAL_URL}}">Build-a-Claw tutorial</a>
           <a href="https://github.com/NVIDIA/nemoclaw-community">Repository</a>
           <a href="https://github.com/NVIDIA/nemoclaw-community/blob/main/SUPPORT.md">Support</a>
           <a href="https://github.com/NVIDIA/nemoclaw-community/blob/main/SECURITY.md">Security</a>
@@ -248,6 +253,6 @@
       </div>
     </footer>
 
-    <script type="module" src="catalog.mjs"></script>
+    <script type="module" src="scripts/catalog.mjs"></script>
   </body>
 </html>

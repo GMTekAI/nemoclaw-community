@@ -51,6 +51,7 @@ Bounded NemoClaw demonstrations built for specific NVIDIA field scenarios, hardw
 
 | Example | Industry | Description |
 | --- | --- | --- |
+| [Build-a-Claw Tutorial](demos/field/build-a-claw-tutorial/README.md) | 🎓 Academia/Education | Guides DGX Spark users through serving local multimodal models with llama.cpp, connecting an agent harness, and trying coding, vision, browser, messaging, and speech workflows. |
 | [DGX Station Blender and Omniverse](demos/field/blender-omniverse-dgx-station/README.md) | 🎬 Media & Entertainment | Lets users direct a specialized Hermes agent on DGX Station across Blender and NVIDIA Omniverse workflows, producing scene edits, OVRTX renders, native OVPhysX simulations, and replay evidence. |
 
 ## [Developer Tools](tools/README.md)
@@ -62,7 +63,15 @@ Standalone utilities that help developers build, evaluate, inspect, or operate N
 | [Agent Memory Benchmark](tools/agent-memory-benchmark/README.md) | ✨ Other | Measures memory built from synthetic email and chat, asks 186 questions on one corpus and 96 on a second, and reports accuracy by question type with ingest and answer token costs. |
 | [Harness Engineering Playground](tools/harness-engineering-playground/README.md) | ✨ Other | Provides an experimental loop for tuning DeepAgents harness profiles against behavioral evaluations, keeping fixes that pass verification and rolling back rejected edits. |
 
-## Recipe Collections
+## Collections
+
+### [Build-a-Claw](collections/build-a-claw/README.md)
+
+Guided demos, tutorials, and reusable recipes created through the Build-a-Claw program, while every example keeps its canonical type, path, and contributor provenance.
+
+| Example | Category | Industry | Description |
+| --- | --- | --- | --- |
+| [Build-a-Claw Tutorial](demos/field/build-a-claw-tutorial/README.md) | NVIDIA Field Demos | 🎓 Academia/Education | Guides DGX Spark users through serving local multimodal models with llama.cpp, connecting an agent harness, and trying coding, vision, browser, messaging, and speech workflows. |
 
 ### [Hackathon Recipes](collections/hackathon/README.md)
 
@@ -70,17 +79,13 @@ A curated collection of NemoClaw recipes created for or featured in hackathons, 
 
 _No examples are currently in this group._
 
-### [Build-a-Claw Recipes](collections/build-a-claw/README.md)
-
-A curated collection of NemoClaw recipes created through the Build-a-Claw program, while each recipe remains organized by its contributor provenance.
-
-_No examples are currently in this group._
-
 ## Contributing An Example
 
 Read [CONTRIBUTING.md](../CONTRIBUTING.md) and the canonical
 [example taxonomy and naming policy](../.agents/skills/nemoclaw-community-contributor-examples/references/example-taxonomy.md).
-Examples must remain independently deployable and must document their
+Runnable examples must remain independently deployable and must document their
 prerequisites, credentials, policies, startup behavior, verification, and
-teardown behavior. Add structured catalog metadata as described in the
+teardown behavior. Documentation-only tutorials keep their canonical content
+in a root `tutorial.md` beside `README.md`. Add structured catalog metadata as
+described in the
 [contributor guide](../CONTRIBUTING.md#catalog-metadata).
